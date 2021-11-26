@@ -2,6 +2,7 @@ from collections import OrderedDict
 from enum import Enum
 
 import timm
+from timm.models.features import FeatureHooks
 from torch.nn import Module, Conv2d
 from torchvision.ops import MultiScaleRoIAlign
 from torchvision.ops.feature_pyramid_network import FeaturePyramidNetwork, LastLevelMaxPool
@@ -26,6 +27,12 @@ class PretrainedEfficientNetV2(ObjectDetector):
             out_indices=out_indices
         )
         out_channels = 256
+
+        hooks = [
+            {'module': 'blocks.5.2'},
+            {'module': 'blocks.6.0'}
+        ]
+        feature_extractor.feature_hooks = FeatureHooks(hooks, feature_extractor.named_modules())
 
         backbone = TimmBackboneWithFPN(
             backbone=feature_extractor,
