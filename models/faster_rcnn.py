@@ -21,7 +21,7 @@ class PretrainedEfficientNetV2(ObjectDetector):
     def define_model(self):
         out_indices = (3, 4)
         feature_extractor = timm.create_model(
-            Network.EFFICIENT_NET_V2.value,
+            Network.MOBILE_NET_V3.value,
             features_only=True,
             out_indices=out_indices
         )
@@ -38,8 +38,8 @@ class PretrainedEfficientNetV2(ObjectDetector):
         # backbone = TimmBackbone(feature_extractor, feature_extractor.feature_info.info[-1]['num_chs'], out_channels)
 
         anchor_generator = AnchorGenerator(
-            sizes=((32, 64, 128, 256, 512),) * len(out_indices),
-            aspect_ratios=((0.5, 1.0, 2.0),) * len(out_indices)
+            sizes=((32, 64, 128, 256, 512),) * (len(out_indices) + 1),
+            aspect_ratios=((0.5, 1.0, 2.0),) * (len(out_indices) + 1)
         )
 
         roi_pooler = MultiScaleRoIAlign(
@@ -65,14 +65,14 @@ class TimmBackboneWithFPN(Module):
     def __init__(self, backbone, in_channels_list, out_channels, extra_blocks=None):
         super().__init__()
 
-        # if extra_blocks is None:
-        #     extra_blocks = LastLevelMaxPool()
+        if extra_blocks is None:
+            extra_blocks = LastLevelMaxPool()
 
         self.body = backbone
         self.fpn = FeaturePyramidNetwork(
             in_channels_list=in_channels_list,
             out_channels=out_channels,
-            # extra_blocks=extra_blocks
+            extra_blocks=extra_blocks
         )
         self.out_channels = out_channels
 
