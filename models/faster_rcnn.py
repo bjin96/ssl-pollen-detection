@@ -23,6 +23,7 @@ class PretrainedEfficientNetV2(ObjectDetector):
         out_indices = (3, 4)
         feature_extractor = timm.create_model(
             Network.MOBILE_NET_V3.value,
+            pretrained=True,
             features_only=True,
             out_indices=out_indices
         )
