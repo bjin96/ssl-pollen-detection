@@ -29,17 +29,14 @@ class PretrainedEfficientNetV2(ObjectDetector):
         out_channels = 256
 
         hooks = [
-            {'module': 'blocks.5.2'},
+            {'module': 'blocks.5.0'},
             {'module': 'blocks.6.0'}
         ]
         feature_extractor.feature_hooks = FeatureHooks(hooks, feature_extractor.named_modules())
 
         backbone = TimmBackboneWithFPN(
             backbone=feature_extractor,
-            in_channels_list=[
-                info['num_chs'] for i, info in enumerate(feature_extractor.feature_info.info)
-                if i in feature_extractor.feature_info.out_indices
-            ],
+            in_channels_list=[160, 960],
             out_channels=out_channels
         )
         # backbone = TimmBackbone(feature_extractor, feature_extractor.feature_info.info[-1]['num_chs'], out_channels)
