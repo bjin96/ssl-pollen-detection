@@ -34,6 +34,14 @@ class PretrainedEfficientNetV2(ObjectDetector):
         ]
         feature_extractor.feature_hooks = FeatureHooks(hooks, feature_extractor.named_modules())
 
+        # Freeze similarly to pytorch model.
+        for child in list(feature_extractor.children())[:-1]:
+            for p in child.parameters():
+                p.requires_grad_(False)
+
+        for p in list(feature_extractor.children())[-1][:3].parameters():
+            p.requires_grad_(False)
+
         backbone = TimmBackboneWithFPN(
             backbone=feature_extractor,
             in_channels_list=[160, 960],
