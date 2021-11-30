@@ -15,25 +15,26 @@ from models.object_detector import ObjectDetector
 class Network(Enum):
     EFFICIENT_NET_V2 = 'tf_efficientnetv2_s_in21ft1k'
     MOBILE_NET_V3 = 'mobilenetv3_large_100_miil'
+    RESNET_50 = 'resnet50'
 
 
 class PretrainedEfficientNetV2(ObjectDetector):
 
     def define_model(self):
-        out_indices = (3, 4)
         feature_extractor = timm.create_model(
             Network.MOBILE_NET_V3.value,
             pretrained=True,
             features_only=True,
-            out_indices=out_indices
         )
+        out_indices = feature_extractor.feature_info.out_indices
         out_channels = 256
+        in_channels = [i['num_chs'] for i in feature_extractor.feature_info.info]
 
-        hooks = [
-            {'module': 'blocks.5.0'},
-            {'module': 'blocks.6.0'}
-        ]
-        feature_extractor.feature_hooks = FeatureHooks(hooks, feature_extractor.named_modules())
+        # hooks = [
+        #     {'module': 'blocks.5.0'},
+        #     {'module': 'blocks.6.0'}
+        # ]
+        # feature_extractor.feature_hooks = FeatureHooks(hooks, feature_extractor.named_modules())
 
         # Freeze similarly to pytorch model.
         for child in list(feature_extractor.children())[:-1]:
@@ -45,7 +46,7 @@ class PretrainedEfficientNetV2(ObjectDetector):
 
         backbone = TimmBackboneWithFPN(
             backbone=feature_extractor,
-            in_channels_list=[160, 960],
+            in_channels_list=in_channels,
             out_channels=out_channels
         )
         # backbone = TimmBackbone(feature_extractor, feature_extractor.feature_info.info[-1]['num_chs'], out_channels)
