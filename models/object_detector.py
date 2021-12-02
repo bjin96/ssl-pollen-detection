@@ -73,7 +73,18 @@ class ObjectDetector(LightningModule):
         )
 
     def test_dataloader(self) -> EVAL_DATALOADERS:
-        pass
+        validation_dataset = Augsburg15DetectionDataset(
+            root_directory=os.path.join(os.path.dirname(__file__), '../datasets/pollen_only'),
+            image_info_csv='pollen15_val_annotations_preprocessed.csv',
+            transforms=ToTensor()
+        )
+        return DataLoader(
+            validation_dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_augsburg15_detection,
+            drop_last=True,
+            num_workers=4
+        )
 
     def val_dataloader(self) -> EVAL_DATALOADERS:
         validation_dataset = Augsburg15DetectionDataset(
