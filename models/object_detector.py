@@ -18,6 +18,7 @@ class ObjectDetector(LightningModule):
         self.num_classes = num_classes
         self.model = self.define_model()
         self.mean_average_precision = MAP()
+        self.class_mean_average_precision = MAP(class_metrics=True)
         self.batch_size = batch_size
 
     @abstractmethod
@@ -39,14 +40,31 @@ class ObjectDetector(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         images, targets = batch
-
         predictions = self.model(images, targets)
-
         mean_average_precision = self.mean_average_precision(predictions, targets)
         self.log('map@0.50:0.95', mean_average_precision['map'], on_epoch=True, batch_size=self.batch_size)
         self.log('map@0.50', mean_average_precision['map_50'], on_epoch=True, batch_size=self.batch_size)
         self.log('map@0.75', mean_average_precision['map_75'], on_epoch=True, batch_size=self.batch_size)
         self.log('mar@100', mean_average_precision['mar_100'], on_epoch=True, batch_size=self.batch_size)
+
+    def test_step(self, batch, batch_idx):
+        images, targets = batch
+        predictions = self.model(images, targets)
+        mean_average_precision = self.class_mean_average_precision(predictions, targets)
+        self.log('map@0.50:0.95', mean_average_precision['map'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map@0.50', mean_average_precision['map_50'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map@0.75', mean_average_precision['map_75'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map_small', mean_average_precision['map_small'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map_medium', mean_average_precision['map_medium'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map_large', mean_average_precision['map_large'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar@1', mean_average_precision['mar_1'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar@10', mean_average_precision['mar_10'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar@100', mean_average_precision['mar_100'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar_small', mean_average_precision['mar_small'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar_medium', mean_average_precision['mar_medium'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar_large', mean_average_precision['mar_large'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map_per_class', mean_average_precision['map_per_class'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar_100_per_class', mean_average_precision['mar_100_per_class'], on_epoch=True, batch_size=self.batch_size)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
