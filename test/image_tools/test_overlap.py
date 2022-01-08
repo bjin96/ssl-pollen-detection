@@ -1,6 +1,8 @@
 from unittest import TestCase
 from unittest.mock import patch, Mock, call
 
+import torch
+
 from src.image_tools.overlap import calculate_box_overlapping, clean_pseudo_labels
 
 
@@ -17,33 +19,28 @@ class TestOverlap(TestCase):
     )
     def test_clean_pseudo_labels(self, calculate_box_overlapping_mock: Mock):
         raw_x_pseudo = [
-            {'boxes': [[0, 0, 10, 10], [20, 20, 40, 40]]},
-            {'boxes': [[0, 0, 10, 10], [20, 20, 40, 40]]}
+            {'boxes': torch.Tensor([[0, 0, 10, 10], [20, 20, 40, 40]])},
+            {'boxes': torch.Tensor([[0, 0, 10, 10], [20, 20, 40, 40]])}
         ]
         y = [
-            {'boxes': [[0, 0, 10, 10], [100, 100, 140, 140]]},
-            {'boxes': [[100, 100, 140, 140], [20, 20, 40, 40]]}
+            {'boxes': torch.Tensor([[0, 0, 10, 10], [100, 100, 140, 140]])},
+            {'boxes': torch.Tensor([[100, 100, 140, 140], [20, 20, 40, 40]])}
         ]
-        expected_cleaned_labels = [
-            {'boxes': [[0, 0, 10, 10], [100, 100, 140, 140], [20, 20, 40, 40]]},
-            {'boxes': [[100, 100, 140, 140], [20, 20, 40, 40], [0, 0, 10, 10]]}
+        expected_boxes = [
+            torch.Tensor([[0, 0, 10, 10], [100, 100, 140, 140], [20, 20, 40, 40]]),
+            torch.Tensor([[100, 100, 140, 140], [20, 20, 40, 40], [0, 0, 10, 10]])
         ]
         actual_cleaned_labels = clean_pseudo_labels(raw_x_pseudo, y)
-        self.assertListEqual(expected_cleaned_labels, actual_cleaned_labels)
 
-        calculate_box_overlapping_mock.assert_has_calls(
-            [
-                call([0, 0, 10, 10], [0, 0, 10, 10]),
-                call([20, 20, 40, 40], [0, 0, 10, 10]), call([20, 20, 40, 40], [100, 100, 140, 140]),
-                call([0, 0, 10, 10], [100, 100, 140, 140]), call([0, 0, 10, 10], [20, 20, 40, 40]),
-                call([20, 20, 40, 40], [100, 100, 140, 140]), call([20, 20, 40, 40], [20, 20, 40, 40])
-            ]
-        )
+        for expected_box, actual_cleaned_label in zip(expected_boxes, actual_cleaned_labels):
+            torch.testing.assert_equal(expected_box, actual_cleaned_label['boxes'])
+
+        calculate_box_overlapping_mock.assert_called()
 
     def test_calculate_box_overlapping(self):
-        box1 = [0, 0, 10, 10]
-        box2 = [5, 5, 15, 15]
-        box3 = [40, 40, 50, 50]
+        box1 = torch.Tensor([0, 0, 10, 10])
+        box2 = torch.Tensor([5, 5, 15, 15])
+        box3 = torch.Tensor([40, 40, 50, 50])
 
         self.assertTrue(calculate_box_overlapping(box1, box2))
         self.assertTrue(calculate_box_overlapping(box2, box1))
