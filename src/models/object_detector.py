@@ -68,7 +68,7 @@ class ObjectDetector(LightningModule):
 
     def train_dataloader(self) -> TRAIN_DATALOADERS:
         train_dataset = Augsburg15DetectionDataset(
-            root_directory=os.path.join(os.path.dirname(__file__), '../datasets/pollen_only'),
+            root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
             image_info_csv='pollen15_train_annotations_preprocessed.csv',
             transforms=Compose([ToTensor(), RandomHorizontalFlip(0.5)])
         )
@@ -88,7 +88,7 @@ class ObjectDetector(LightningModule):
 
     def test_dataloader(self) -> EVAL_DATALOADERS:
         validation_dataset = Augsburg15DetectionDataset(
-            root_directory=os.path.join(os.path.dirname(__file__), '../datasets/pollen_only'),
+            root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
             image_info_csv='pollen15_val_annotations_preprocessed.csv',
             transforms=ToTensor()
         )
@@ -102,7 +102,7 @@ class ObjectDetector(LightningModule):
 
     def val_dataloader(self) -> EVAL_DATALOADERS:
         validation_dataset = Augsburg15DetectionDataset(
-            root_directory=os.path.join(os.path.dirname(__file__), '../datasets/pollen_only'),
+            root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
             image_info_csv='pollen15_val_annotations_preprocessed.csv',
             transforms=ToTensor()
         )
