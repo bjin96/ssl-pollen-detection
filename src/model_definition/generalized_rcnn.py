@@ -53,7 +53,7 @@ class GeneralizedRCNN(nn.Module):
             result (list[BoxList] or dict[Tensor]): the output from the model.
                 During training, it returns a dict[Tensor] which contains the losses.
                 During testing, it returns list[BoxList] contains additional fields
-                like `scores`, `labels` and `mask` (for Mask R-CNN models).
+                like `scores`, `labels` and `mask` (for Mask R-CNN image_tools).
 
         """
         if self.training and targets is None:

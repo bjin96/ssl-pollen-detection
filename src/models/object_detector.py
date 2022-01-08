@@ -7,8 +7,8 @@ from pytorch_lightning.utilities.types import STEP_OUTPUT, TRAIN_DATALOADERS, EV
 from torch.utils.data import DataLoader
 from torchmetrics import MAP
 
-from data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
-from training.transforms import Compose, ToTensor, RandomHorizontalFlip
+from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
+from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip
 
 
 class ObjectDetector(LightningModule):
@@ -24,10 +24,6 @@ class ObjectDetector(LightningModule):
     @abstractmethod
     def define_model(self):
         pass
-
-    def forward(self, x):
-        y = self.model(x)
-        return y
 
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
         images, targets = batch

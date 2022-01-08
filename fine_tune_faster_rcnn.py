@@ -1,21 +1,17 @@
 import os
-from typing import Optional
 
 import torch
-import pytorch_lightning as pl
-from pytorch_lightning.utilities.types import STEP_OUTPUT
 
-import model_definition
-from training.engine import train_one_epoch, evaluate
+from src.training import train_one_epoch, evaluate
 from torch.utils.data import DataLoader
-from model_definition.faster_rcnn import FastRCNNPredictor
+from src.model_definition.faster_rcnn import FastRCNNPredictor
 
-from data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
-from training.transforms import ToTensor, RandomHorizontalFlip, Compose
+from src.data_loading import Augsburg15DetectionDataset, collate_augsburg15_detection
+from src.training import ToTensor, RandomHorizontalFlip, Compose
 
 
 def get_fasterrcnn_model():
-    model = model_definition.faster_rcnn.fasterrcnn_mobilenet_v3_large_320_fpn(pretrained=True)
+    model = src.model_definition.faster_rcnn.fasterrcnn_mobilenet_v3_large_320_fpn(pretrained=True)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, Augsburg15DetectionDataset.NUM_CLASSES)
     return model
@@ -69,7 +65,7 @@ def fine_tune_faster_rcnn(num_epochs, batch_size=4, print_frequency=10):
 
     for epoch in range(num_epochs):
         metric_logger = train_one_epoch(model, optimizer, train_loader, device, epoch, print_frequency)
-        torch.save(model.state_dict(), f'models/model_epoch_{epoch}')
+        torch.save(model.state_dict(), f'src/models/model_epoch_{epoch}')
         # lr_scheduler.step()
         _, metric_logger = evaluate(model, validation_loader, device)
         print(metric_logger.meters['loss'].value)

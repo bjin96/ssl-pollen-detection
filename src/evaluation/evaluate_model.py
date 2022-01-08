@@ -1,11 +1,11 @@
 import torch
 from torch.utils.data import DataLoader
 
-from training.engine import evaluate
+from src.training.engine import evaluate
 from fine_tune_faster_rcnn import get_fasterrcnn_model
-from training.transforms import ToTensor
+from src.training.transforms import ToTensor
 import os
-from data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
+from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
 
 
 def evaluate_saved_model(saved_model_path):

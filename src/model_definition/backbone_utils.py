@@ -14,7 +14,7 @@ from torchvision.models import resnet
 class BackboneWithFPN(nn.Module):
     """
     Adds a FPN on top of a model.
-    Internally, it uses torchvision.models._utils.IntermediateLayerGetter to
+    Internally, it uses torchvision.image_tools._utils.IntermediateLayerGetter to
     extract a submodel that returns the feature maps specified in return_layers.
     The same limitations of IntermediatLayerGetter apply here.
     Args:
@@ -62,7 +62,7 @@ def resnet_fpn_backbone(
 
     Examples::
 
-        >>> from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
+        >>> from torchvision.image_tools.detection.backbone_utils import resnet_fpn_backbone
         >>> backbone = resnet_fpn_backbone('resnet50', pretrained=True, trainable_layers=3)
         >>> # get some dummy image
         >>> x = torch.rand(1,3,64,64)

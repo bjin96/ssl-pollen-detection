@@ -6,8 +6,8 @@ import torchvision
 from torch import nn, Tensor
 from typing import List, Tuple, Dict, Optional
 
-from model_definition.image_list import ImageList
-from model_definition.roi_heads import paste_masks_in_image
+from src.model_definition.image_list import ImageList
+from src.model_definition.roi_heads import paste_masks_in_image
 
 
 @torch.jit.unused

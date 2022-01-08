@@ -555,7 +555,7 @@ def ssd300_vgg16(pretrained: bool = False, progress: bool = True, num_classes: i
 
     Example:
 
-        >>> model = torchvision.models.detection.ssd300_vgg16(pretrained=True)
+        >>> model = torchvision.image_tools.detection.ssd300_vgg16(pretrained=True)
         >>> model.eval()
         >>> x = [torch.rand(3, 300, 300), torch.rand(3, 500, 400)]
         >>> predictions = model(x)

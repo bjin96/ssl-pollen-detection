@@ -2,14 +2,13 @@ from collections import OrderedDict
 from enum import Enum
 
 import timm
-from timm.models.features import FeatureHooks
 from torch.nn import Module, Conv2d
 from torchvision.ops import MultiScaleRoIAlign
 from torchvision.ops.feature_pyramid_network import FeaturePyramidNetwork, LastLevelMaxPool
 
-from model_definition.anchor_utils import AnchorGenerator
-from model_definition.faster_rcnn import FasterRCNN
-from models.object_detector import ObjectDetector
+from src.model_definition.anchor_utils import AnchorGenerator
+from src.model_definition.faster_rcnn import FasterRCNN
+from src.models.object_detector import ObjectDetector
 
 
 class Network(Enum):

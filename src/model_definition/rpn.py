@@ -8,8 +8,8 @@ from torch import nn, Tensor
 import torchvision
 from torchvision.ops import boxes as box_ops
 
-import model_definition._utils as det_utils
-from model_definition.image_list import ImageList
+import src.model_definition._utils as det_utils
+from src.model_definition.image_list import ImageList
 
 from typing import List, Optional, Dict, Tuple
 

@@ -9,7 +9,7 @@ from torchvision.ops import boxes as box_ops
 
 from torchvision.ops import roi_align
 
-import model_definition._utils as det_utils
+import src.model_definition._utils as det_utils
 
 from typing import Optional, List, Dict, Tuple
 
