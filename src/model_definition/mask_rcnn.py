@@ -109,12 +109,12 @@ class MaskRCNN(FasterRCNN):
 
         >>> import torch
         >>> import torchvision
-        >>> from torchvision.image_tools.detection import MaskRCNN
-        >>> from torchvision.image_tools.detection.anchor_utils import AnchorGenerator
+        >>> from torchvision.models.detection import MaskRCNN
+        >>> from torchvision.models.detection.anchor_utils import AnchorGenerator
         >>>
         >>> # load a pre-trained model for classification and return
         >>> # only the features
-        >>> backbone = torchvision.image_tools.mobilenet_v2(pretrained=True).features
+        >>> backbone = torchvision.models.mobilenet_v2(pretrained=True).features
         >>> # MaskRCNN needs to know the number of
         >>> # output channels in a backbone. For mobilenet_v2, it's 1280
         >>> # so we need to add it here
@@ -308,7 +308,7 @@ def maskrcnn_resnet50_fpn(pretrained=False, progress=True,
 
     Example::
 
-        >>> model = torchvision.image_tools.detection.maskrcnn_resnet50_fpn(pretrained=True)
+        >>> model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
         >>> model.eval()
         >>> x = [torch.rand(3, 300, 400), torch.rand(3, 500, 400)]
         >>> predictions = model(x)

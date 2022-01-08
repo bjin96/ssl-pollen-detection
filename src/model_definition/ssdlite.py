@@ -169,11 +169,11 @@ def ssdlite320_mobilenet_v3_large(pretrained: bool = False, progress: bool = Tru
     `"MobileNetV2: Inverted Residuals and Linear Bottlenecks"
     <https://arxiv.org/abs/1801.04381>`_.
 
-    See :func:`~torchvision.image_tools.detection.ssd300_vgg16` for more details.
+    See :func:`~torchvision.models.detection.ssd300_vgg16` for more details.
 
     Example:
 
-        >>> model = torchvision.image_tools.detection.ssdlite320_mobilenet_v3_large(pretrained=True)
+        >>> model = torchvision.models.detection.ssdlite320_mobilenet_v3_large(pretrained=True)
         >>> model.eval()
         >>> x = [torch.rand(3, 320, 320), torch.rand(3, 500, 400)]
         >>> predictions = model(x)

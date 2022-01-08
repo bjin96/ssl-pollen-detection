@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torchvision.ops import MultiScaleRoIAlign
 
 from src.model_definition._utils import overwrite_eps
-from torchvision.models.utils import load_state_dict_from_url
+from torchvision._internally_replaced_utils import load_state_dict_from_url
 
 from src.model_definition.anchor_utils import AnchorGenerator
 from src.model_definition.generalized_rcnn import GeneralizedRCNN
@@ -105,11 +105,11 @@ class FasterRCNN(GeneralizedRCNN):
 
         >>> import torch
         >>> import torchvision
-        >>> from torchvision.image_tools.detection import FasterRCNN
-        >>> from torchvision.image_tools.detection.rpn import AnchorGenerator
+        >>> from torchvision.models.detection import FasterRCNN
+        >>> from torchvision.models.detection.rpn import AnchorGenerator
         >>> # load a pre-trained model for classification and return
         >>> # only the features
-        >>> backbone = torchvision.image_tools.mobilenet_v2(pretrained=True).features
+        >>> backbone = torchvision.models.mobilenet_v2(pretrained=True).features
         >>> # FasterRCNN needs to know the number of
         >>> # output channels in a backbone. For mobilenet_v2, it's 1280
         >>> # so we need to add it here
@@ -241,7 +241,7 @@ class FasterRCNN(GeneralizedRCNN):
 
 class TwoMLPHead(nn.Module):
     """
-    Standard heads for FPN-based image_tools
+    Standard heads for FPN-based models
 
     Args:
         in_channels (int): number of input channels
@@ -333,7 +333,7 @@ def fasterrcnn_resnet50_fpn(pretrained=False, progress=True,
 
     Example::
 
-        >>> model = torchvision.image_tools.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+        >>> model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
         >>> # For training
         >>> images, boxes = torch.rand(4, 3, 600, 1200), torch.rand(4, 11, 4)
         >>> labels = torch.randint(1, 91, (4, 11))
@@ -405,12 +405,12 @@ def fasterrcnn_mobilenet_v3_large_320_fpn(pretrained=False, progress=True, num_c
     """
     Constructs a low resolution Faster R-CNN model with a MobileNetV3-Large FPN backbone tunned for mobile use-cases.
     It works similarly to Faster R-CNN with ResNet-50 FPN backbone. See
-    :func:`~torchvision.image_tools.detection.fasterrcnn_resnet50_fpn` for more
+    :func:`~torchvision.models.detection.fasterrcnn_resnet50_fpn` for more
     details.
 
     Example::
 
-        >>> model = torchvision.image_tools.detection.fasterrcnn_mobilenet_v3_large_320_fpn(pretrained=True)
+        >>> model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_320_fpn(pretrained=True)
         >>> model.eval()
         >>> x = [torch.rand(3, 300, 400), torch.rand(3, 500, 400)]
         >>> predictions = model(x)
@@ -443,12 +443,12 @@ def fasterrcnn_mobilenet_v3_large_fpn(pretrained=False, progress=True, num_class
     """
     Constructs a high resolution Faster R-CNN model with a MobileNetV3-Large FPN backbone.
     It works similarly to Faster R-CNN with ResNet-50 FPN backbone. See
-    :func:`~torchvision.image_tools.detection.fasterrcnn_resnet50_fpn` for more
+    :func:`~torchvision.models.detection.fasterrcnn_resnet50_fpn` for more
     details.
 
     Example::
 
-        >>> model = torchvision.image_tools.detection.fasterrcnn_mobilenet_v3_large_fpn(pretrained=True)
+        >>> model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_fpn(pretrained=True)
         >>> model.eval()
         >>> x = [torch.rand(3, 300, 400), torch.rand(3, 500, 400)]
         >>> predictions = model(x)
