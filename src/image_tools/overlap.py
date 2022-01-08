@@ -16,8 +16,9 @@ def clean_pseudo_labels(raw_x_pseudo, y):
                     break
             if not is_overlapping:
                 non_overlapping_pseudo_boxes.append(pseudo_box)
-        non_overlapping_pseudo_boxes = torch.stack(non_overlapping_pseudo_boxes).to(ground_truth_sample['boxes'].device)
-        ground_truth_sample['boxes'] = torch.cat([ground_truth_sample['boxes'], non_overlapping_pseudo_boxes])
+        if len(non_overlapping_pseudo_boxes) != 0:
+            non_overlapping_pseudo_boxes = torch.stack(non_overlapping_pseudo_boxes).to(ground_truth_sample['boxes'].device)
+            ground_truth_sample['boxes'] = torch.cat([ground_truth_sample['boxes'], non_overlapping_pseudo_boxes])
     return y
 
 
