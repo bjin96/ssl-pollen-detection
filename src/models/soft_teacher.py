@@ -1,0 +1,154 @@
+import os
+from copy import deepcopy
+from typing import Optional, T
+
+import pytorch_lightning as pl
+from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT
+from torch.optim import Optimizer, Adam
+from torch.utils.data import DataLoader
+from torchmetrics import MAP
+
+from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
+from src.image_tools.overlap import clean_pseudo_labels
+from src.models.exponential_moving_average import ExponentialMovingAverage
+from src.models.faster_rcnn import PretrainedEfficientNetV2
+from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip
+
+
+class SoftTeacher(pl.LightningModule):
+
+    def __init__(self, num_classes, batch_size):
+        super(SoftTeacher, self).__init__()
+
+        self.num_classes = num_classes
+        self.batch_size = batch_size
+
+        self.student = PretrainedEfficientNetV2(
+            Augsburg15DetectionDataset.NUM_CLASSES,
+            batch_size=4
+        ).model
+        self.teacher = deepcopy(self.student)
+        self.teacher.eval()
+        # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
+        self.exponential_moving_average = ExponentialMovingAverage(self.student, self.teacher, decay=0.99)
+
+        self.mean_average_precision = MAP()
+        self.class_mean_average_precision = MAP(class_metrics=True)
+
+    def on_before_zero_grad(self, optimizer: Optimizer) -> None:
+        self.exponential_moving_average.update_teacher()
+
+    def forward(self, x, y=None):
+        # TODO Depends on consistency regularization: ideally, there should be a weakly augmented batch (for the
+        # TODO teacher) and a strongly augmented batch (for the student).
+
+        # Originally, this would be two different batches, labelled + unlabelled.
+        raw_x_pseudo = self.teacher(x)
+        cleaned_x_pseudo = clean_pseudo_labels(raw_x_pseudo, y)
+        y_labelled = self.student(x, cleaned_x_pseudo)
+
+        # TODO Weighting supervised + unsupervised loss: now both are handled equally.
+
+        # Soft teacher: use classification head of teacher to weight the loss: if teacher sure about a false negative
+        # weight lower.
+
+        # Box jittering: use box regression head of teacher (multiple times with different starting points) and look if
+        # it comes to the same result (-> reliable regression, higher weight).
+        return y_labelled
+
+    def train(self: T, mode: bool = True) -> T:
+        super().train(mode)
+        self.teacher.eval()
+        return self
+
+    def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
+        images, targets = batch
+
+        loss_dict = self(images, targets)
+
+        total_loss = sum(loss for loss in loss_dict.values())
+        self.log('train_loss', total_loss, on_step=True, batch_size=self.batch_size)
+        return total_loss
+
+    def validation_step(self, batch, batch_idx) -> Optional[STEP_OUTPUT]:
+        images, targets = batch
+        predictions = self(images, targets)
+        mean_average_precision = self.mean_average_precision(predictions, targets)
+        self.log('map@0.50:0.95', mean_average_precision['map'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map@0.50', mean_average_precision['map_50'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map@0.75', mean_average_precision['map_75'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar@100', mean_average_precision['mar_100'], on_epoch=True, batch_size=self.batch_size)
+
+    def test_step(self, batch, batch_idx):
+        images, targets = batch
+        predictions = self(images, targets)
+        mean_average_precision = self.class_mean_average_precision(predictions, targets)
+        self.log('map@0.50:0.95', mean_average_precision['map'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map@0.50', mean_average_precision['map_50'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map@0.75', mean_average_precision['map_75'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map_small', mean_average_precision['map_small'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map_medium', mean_average_precision['map_medium'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map_large', mean_average_precision['map_large'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar@1', mean_average_precision['mar_1'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar@10', mean_average_precision['mar_10'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar@100', mean_average_precision['mar_100'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar_small', mean_average_precision['mar_small'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar_medium', mean_average_precision['mar_medium'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar_large', mean_average_precision['mar_large'], on_epoch=True, batch_size=self.batch_size)
+        self.log('map_per_class', mean_average_precision['map_per_class'], on_epoch=True, batch_size=self.batch_size)
+        self.log('mar_100_per_class', mean_average_precision['mar_100_per_class'], on_epoch=True, batch_size=self.batch_size)
+
+    def configure_optimizers(self):
+        optimizer = Adam(self.parameters(), lr=0.0001)
+        return optimizer
+
+    def train_dataloader(self) -> TRAIN_DATALOADERS:
+        train_dataset = Augsburg15DetectionDataset(
+            root_directory=os.path.join(os.path.dirname(__file__), '../datasets/pollen_only'),
+            image_info_csv='pollen15_train_annotations_preprocessed.csv',
+            transforms=Compose([ToTensor(), RandomHorizontalFlip(0.5)])
+        )
+        return DataLoader(
+            train_dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_augsburg15_detection,
+            drop_last=True,
+            shuffle=True,
+            num_workers=4,
+            # sampler=WeightedRandomSampler(
+            #     weights=train_dataset.get_mean_sample_weights(),
+            #     num_samples=100,
+            #     replacement=True
+            # )
+        )
+
+    def test_dataloader(self) -> EVAL_DATALOADERS:
+        validation_dataset = Augsburg15DetectionDataset(
+            root_directory=os.path.join(os.path.dirname(__file__), '../datasets/pollen_only'),
+            image_info_csv='pollen15_val_annotations_preprocessed.csv',
+            transforms=ToTensor()
+        )
+        return DataLoader(
+            validation_dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_augsburg15_detection,
+            drop_last=True,
+            num_workers=4
+        )
+
+    def val_dataloader(self) -> EVAL_DATALOADERS:
+        validation_dataset = Augsburg15DetectionDataset(
+            root_directory=os.path.join(os.path.dirname(__file__), '../datasets/pollen_only'),
+            image_info_csv='pollen15_val_annotations_preprocessed.csv',
+            transforms=ToTensor()
+        )
+        return DataLoader(
+            validation_dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_augsburg15_detection,
+            drop_last=True,
+            num_workers=4
+        )
+
+    def predict_dataloader(self) -> EVAL_DATALOADERS:
+        pass
