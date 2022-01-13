@@ -8,7 +8,11 @@ def clean_pseudo_labels(raw_x_pseudo, y):
     """
     for predicted_sample, ground_truth_sample in zip(raw_x_pseudo, y):
         non_overlapping_pseudo_boxes = []
-        for pseudo_box in predicted_sample['boxes']:
+        non_overlapping_pseudo_boxes_area = []
+        non_overlapping_pseudo_boxes_label = []
+        non_overlapping_pseudo_boxes_score = []
+        non_overlapping_pseudo_boxes_is_crowd = []
+        for pseudo_box, pseudo_label, pseudo_score in zip(predicted_sample['boxes'], predicted_sample['labels'], predicted_sample['scores']):
             is_overlapping = False
             for ground_truth_box in ground_truth_sample['boxes']:
                 if calculate_box_overlapping(pseudo_box, ground_truth_box):
@@ -16,9 +20,23 @@ def clean_pseudo_labels(raw_x_pseudo, y):
                     break
             if not is_overlapping:
                 non_overlapping_pseudo_boxes.append(pseudo_box)
+                non_overlapping_pseudo_boxes_area.append((pseudo_box[2] - pseudo_box[0]) * (pseudo_box[3] - pseudo_box[1]))
+                non_overlapping_pseudo_boxes_label.append(pseudo_label)
+                non_overlapping_pseudo_boxes_score.append(pseudo_score)
+                non_overlapping_pseudo_boxes_is_crowd.append(torch.tensor(0))
         if len(non_overlapping_pseudo_boxes) != 0:
-            non_overlapping_pseudo_boxes = torch.stack(non_overlapping_pseudo_boxes).to(ground_truth_sample['boxes'].device)
+            device = ground_truth_sample['boxes'].device
+            non_overlapping_pseudo_boxes_score = torch.stack(non_overlapping_pseudo_boxes_score).to(device)
+            ground_truth_scores = torch.ones(ground_truth_sample['boxes'].shape[0], dtype=torch.float32, device=device)
+            ground_truth_sample['scores'] = torch.cat([ground_truth_scores, non_overlapping_pseudo_boxes_score])
+            non_overlapping_pseudo_boxes = torch.stack(non_overlapping_pseudo_boxes).to(device)
             ground_truth_sample['boxes'] = torch.cat([ground_truth_sample['boxes'], non_overlapping_pseudo_boxes])
+            non_overlapping_pseudo_boxes_label = torch.stack(non_overlapping_pseudo_boxes_label).to(device)
+            ground_truth_sample['labels'] = torch.cat([ground_truth_sample['labels'], non_overlapping_pseudo_boxes_label])
+            non_overlapping_pseudo_boxes_area = torch.stack(non_overlapping_pseudo_boxes_area).to(device)
+            ground_truth_sample['area'] = torch.cat([ground_truth_sample['area'], non_overlapping_pseudo_boxes_area])
+            non_overlapping_pseudo_boxes_is_crowd = torch.stack(non_overlapping_pseudo_boxes_is_crowd).to(device)
+            ground_truth_sample['iscrowd'] = torch.cat([ground_truth_sample['iscrowd'], non_overlapping_pseudo_boxes_is_crowd])
     return y
 
 
