@@ -1,12 +1,12 @@
 import os
 from copy import deepcopy
-from typing import Optional, T
+from typing import Optional
 
 import pytorch_lightning as pl
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT
 from torch.optim import Optimizer, Adam
 from torch.utils.data import DataLoader
-from torchmetrics import MAP
+from torchmetrics.detection.map import MeanAveragePrecision
 
 from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
 from src.image_tools.overlap import clean_pseudo_labels
@@ -32,20 +32,15 @@ class SoftTeacher(pl.LightningModule):
         # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
         self.exponential_moving_average = ExponentialMovingAverage(self.student, self.teacher, decay=0.99)
 
-        self.mean_average_precision = MAP()
-        self.class_mean_average_precision = MAP(class_metrics=True)
+        self.mean_average_precision = MeanAveragePrecision()
+        self.class_mean_average_precision = MeanAveragePrecision(class_metrics=True)
 
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
         self.exponential_moving_average.update_teacher()
 
     def forward(self, x, y=None):
-        # TODO Depends on consistency regularization: ideally, there should be a weakly augmented batch (for the
-        # TODO teacher) and a strongly augmented batch (for the student).
 
-        # Originally, this would be two different batches, labelled + unlabelled.
-        raw_x_pseudo = self.teacher(x)
-        cleaned_x_pseudo = clean_pseudo_labels(raw_x_pseudo, y)
-        y_labelled = self.student(x, cleaned_x_pseudo)
+        y_labelled = self.student(x, y)
 
         # TODO Weighting supervised + unsupervised loss: now both are handled equally.
 
@@ -56,7 +51,7 @@ class SoftTeacher(pl.LightningModule):
         # it comes to the same result (-> reliable regression, higher weight).
         return y_labelled
 
-    def train(self: T, mode: bool = True) -> T:
+    def train(self: 'SoftTeacher', mode: bool = True) -> 'SoftTeacher':
         super().train(mode)
         self.teacher.eval()
         return self
@@ -64,7 +59,14 @@ class SoftTeacher(pl.LightningModule):
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
         images, targets = batch
 
-        loss_dict = self(images, targets)
+        # TODO Depends on consistency regularization: ideally, there should be a weakly augmented batch (for the
+        # TODO teacher) and a strongly augmented batch (for the student).
+
+        # Originally, this would be two different batches, labelled + unlabelled.
+        raw_x_pseudo = self.teacher(images)
+        cleaned_y_pseudo = clean_pseudo_labels(raw_x_pseudo, targets)
+
+        loss_dict = self(images, cleaned_y_pseudo)
 
         total_loss = sum(loss for loss in loss_dict.values())
         self.log('train_loss', total_loss, on_step=True, batch_size=self.batch_size)

@@ -5,7 +5,7 @@ import torch
 from pytorch_lightning import LightningModule
 from pytorch_lightning.utilities.types import STEP_OUTPUT, TRAIN_DATALOADERS, EVAL_DATALOADERS
 from torch.utils.data import DataLoader
-from torchmetrics import MAP
+from torchmetrics.detection.map import MeanAveragePrecision
 
 from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
 from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip
@@ -17,8 +17,8 @@ class ObjectDetector(LightningModule):
         super().__init__()
         self.num_classes = num_classes
         self.model = self.define_model()
-        self.mean_average_precision = MAP()
-        self.class_mean_average_precision = MAP(class_metrics=True)
+        self.mean_average_precision = MeanAveragePrecision()
+        self.class_mean_average_precision = MeanAveragePrecision(class_metrics=True)
         self.batch_size = batch_size
 
     @abstractmethod
