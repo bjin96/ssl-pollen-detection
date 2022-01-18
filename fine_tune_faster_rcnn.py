@@ -2,16 +2,16 @@ import os
 
 import torch
 
-from src.training import train_one_epoch, evaluate
+from src.training.engine import train_one_epoch, evaluate
 from torch.utils.data import DataLoader
-from src.model_definition.faster_rcnn import FastRCNNPredictor
+from src.model_definition.faster_rcnn import FastRCNNPredictor, fasterrcnn_mobilenet_v3_large_320_fpn
 
-from src.data_loading import Augsburg15DetectionDataset, collate_augsburg15_detection
-from src.training import ToTensor, RandomHorizontalFlip, Compose
+from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
+from src.training.transforms import ToTensor, RandomHorizontalFlip, Compose
 
 
 def get_fasterrcnn_model():
-    model = src.model_definition.faster_rcnn.fasterrcnn_mobilenet_v3_large_320_fpn(pretrained=True)
+    model = fasterrcnn_mobilenet_v3_large_320_fpn(pretrained=True)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, Augsburg15DetectionDataset.NUM_CLASSES)
     return model
