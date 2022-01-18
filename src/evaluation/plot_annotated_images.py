@@ -1,19 +1,23 @@
-import torch
-from torch.utils.data import DataLoader
+from typing import Type
 
-from fine_tune_faster_rcnn import get_fasterrcnn_model
+import numpy as np
+from torch.utils.data import DataLoader
+from pytorch_lightning import LightningModule
+
+from src.models.soft_teacher import SoftTeacher
 from src.training.transforms import ToTensor
 import os
 from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
 import matplotlib.pyplot as plt
 from matplotlib import patches
 
+# Use boxes with higher confidence only.
+SCORE_THRESHOLD = 0.5
 
-def plot_annotated_images(saved_model_path):
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
+def plot_annotated_images(checkpoint_path: str, model_class: Type[LightningModule]):
     validation_dataset = Augsburg15DetectionDataset(
-        root_directory=os.path.join('../datasets/pollen_only'),
+        root_directory=os.path.join('../../datasets/pollen_only'),
         image_info_csv='pollen15_val_annotations_preprocessed.csv',
         transforms=ToTensor()
     )
@@ -25,42 +29,43 @@ def plot_annotated_images(saved_model_path):
         num_workers=4
     )
 
-    model = get_fasterrcnn_model()
-    model.load_state_dict(torch.load(saved_model_path))
-    model.to(device)
+    model = model_class.load_from_checkpoint(checkpoint_path, num_classes=Augsburg15DetectionDataset.NUM_CLASSES, batch_size=8)
     model.eval()
 
     for index, sample in enumerate(validation_loader):
         image, target = sample
-        image = image.to(device)
 
         result = model(image)
 
         plot_bounding_box_image(
-            image[0],
-            result[0]['boxes'],
-            result[0]['labels'],
-            target[0]['boxes'],
-            target[0]['labels'],
+            image[0].detach().numpy(),
+            result[0]['boxes'].detach().numpy(),
+            result[0]['labels'].detach().numpy(),
+            result[0]['scores'].detach().numpy(),
+            target[0]['boxes'].detach().numpy(),
+            target[0]['labels'].detach().numpy(),
             index
         )
 
 
-def plot_bounding_box_image(image, bounding_boxes, labels, ground_truth_boxes, ground_truth_labels, index):
+def plot_bounding_box_image(image, bounding_boxes, labels, scores, ground_truth_boxes, ground_truth_labels, index):
     plt.rcParams["figure.figsize"] = (20, 20)
     fig, ax = plt.subplots()
 
-    ax.imshow(image.cpu().permute(1, 2, 0))
+    ax.imshow(image.transpose(1, 2, 0))
 
-    _plot_bounding_boxes(bounding_boxes, labels, ax, 'green')
-    _plot_bounding_boxes(ground_truth_boxes, ground_truth_labels, ax, 'red')
+    _plot_bounding_boxes(bounding_boxes, labels, scores, ax, 'green')
+    _plot_bounding_boxes(ground_truth_boxes, ground_truth_labels, np.ones_like(ground_truth_labels), ax, 'red')
 
-    plt.savefig(f'./plots/{index}.jpg')
+    plt.savefig(f'../../plots/{index}.jpg')
     plt.close()
 
 
-def _plot_bounding_boxes(bounding_boxes, labels, ax, color):
-    for i, bounding_box in enumerate(bounding_boxes):
+def _plot_bounding_boxes(bounding_boxes, labels, scores, ax, color):
+    for bounding_box, label, score in zip(bounding_boxes, labels, scores):
+        if score < SCORE_THRESHOLD:
+            continue
+
         width = bounding_box[2] - bounding_box[0]
         height = bounding_box[3] - bounding_box[1]
 
@@ -79,11 +84,12 @@ def _plot_bounding_boxes(bounding_boxes, labels, ax, color):
         ax.text(
             bounding_box[0],
             label_y,
-            Augsburg15DetectionDataset.INVERSE_CLASS_MAPPING[int(labels[i])],
+            Augsburg15DetectionDataset.INVERSE_CLASS_MAPPING[int(label)],
             color='white',
             bbox=dict(facecolor=color, edgecolor=color)
         )
 
 
 if __name__ == '__main__':
-    plot_annotated_images('../models/model_epoch_25')
+    CKPT_PATH = '../../lightning_logs/soft_teacher_#74301e48/checkpoints/epoch=3-step=5907.ckpt'
+    plot_annotated_images(CKPT_PATH, SoftTeacher)
