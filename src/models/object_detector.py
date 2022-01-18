@@ -1,5 +1,6 @@
 import os
 from abc import abstractmethod
+from typing import Any
 
 import torch
 from pytorch_lightning import LightningModule
@@ -25,10 +26,13 @@ class ObjectDetector(LightningModule):
     def define_model(self):
         pass
 
+    def forward(self, images, targets=None) -> Any:
+        return self.model(images, targets)
+
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
         images, targets = batch
 
-        loss_dict = self.model(images, targets)
+        loss_dict = self(images, targets)
 
         total_loss = sum(loss for loss in loss_dict.values())
         self.log('train_loss', total_loss, on_step=True, batch_size=self.batch_size)
@@ -36,7 +40,7 @@ class ObjectDetector(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         images, targets = batch
-        predictions = self.model(images, targets)
+        predictions = self(images, targets)
         mean_average_precision = self.mean_average_precision(predictions, targets)
         self.log('map@0.50:0.95', mean_average_precision['map'], on_epoch=True, batch_size=self.batch_size)
         self.log('map@0.50', mean_average_precision['map_50'], on_epoch=True, batch_size=self.batch_size)
@@ -45,7 +49,7 @@ class ObjectDetector(LightningModule):
 
     def test_step(self, batch, batch_idx):
         images, targets = batch
-        predictions = self.model(images, targets)
+        predictions = self(images, targets)
         mean_average_precision = self.class_mean_average_precision(predictions, targets)
         self.log('map@0.50:0.95', mean_average_precision['map'], on_epoch=True, batch_size=self.batch_size)
         self.log('map@0.50', mean_average_precision['map_50'], on_epoch=True, batch_size=self.batch_size)

@@ -16,6 +16,9 @@ from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip
 
 
 class SoftTeacher(pl.LightningModule):
+    """
+    Adapted SoftTeacher model from https://arxiv.org/abs/2106.09018.
+    """
 
     def __init__(self, num_classes, batch_size):
         super(SoftTeacher, self).__init__()
@@ -26,8 +29,11 @@ class SoftTeacher(pl.LightningModule):
         self.student = PretrainedEfficientNetV2(
             Augsburg15DetectionDataset.NUM_CLASSES,
             batch_size=4
-        ).model
+        )
         self.teacher = deepcopy(self.student)
+        self.teacher.freeze()
+        # Only use high confidence additional pseudo boxes.
+        self.teacher.model.roi_heads.score_thresh = 0.9
         self.teacher.eval()
         # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
         self.exponential_moving_average = ExponentialMovingAverage(self.student, self.teacher, decay=0.99)

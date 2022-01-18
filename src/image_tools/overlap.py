@@ -29,7 +29,6 @@ def clean_pseudo_labels(raw_x_pseudo, y, iou_threshold: float = 0.7):
         ground_truth_sample['labels'] = labels[keep_indices]
         ground_truth_sample['area'] = area[keep_indices]
         ground_truth_sample['iscrowd'] = is_crowd[keep_indices]
-
     return y
 
 
