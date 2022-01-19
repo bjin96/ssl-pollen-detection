@@ -38,7 +38,6 @@ class SoftTeacher(pl.LightningModule):
         # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
         self.exponential_moving_average = ExponentialMovingAverage(self.student, self.teacher, decay=0.99)
 
-        self.mean_average_precision = MeanAveragePrecision()
         self.class_mean_average_precision = MeanAveragePrecision(class_metrics=True)
 
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
@@ -81,15 +80,14 @@ class SoftTeacher(pl.LightningModule):
     def validation_step(self, batch, batch_idx) -> Optional[STEP_OUTPUT]:
         images, targets = batch
         predictions = self(images, targets)
-        mean_average_precision = self.mean_average_precision(predictions, targets)
-        self.log('map@0.50:0.95', mean_average_precision['map'], on_epoch=True, batch_size=self.batch_size)
-        self.log('map@0.50', mean_average_precision['map_50'], on_epoch=True, batch_size=self.batch_size)
-        self.log('map@0.75', mean_average_precision['map_75'], on_epoch=True, batch_size=self.batch_size)
-        self.log('mar@100', mean_average_precision['mar_100'], on_epoch=True, batch_size=self.batch_size)
+        self._log_metrics(predictions, targets)
 
     def test_step(self, batch, batch_idx):
         images, targets = batch
         predictions = self(images, targets)
+        self._log_metrics(predictions, targets)
+
+    def _log_metrics(self, predictions, targets):
         mean_average_precision = self.class_mean_average_precision(predictions, targets)
         self.log('map@0.50:0.95', mean_average_precision['map'], on_epoch=True, batch_size=self.batch_size)
         self.log('map@0.50', mean_average_precision['map_50'], on_epoch=True, batch_size=self.batch_size)
