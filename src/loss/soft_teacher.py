@@ -20,13 +20,26 @@ def soft_teacher_classification_loss(
     select_unsupervised_background = torch.logical_and(torch.logical_not(select_foreground), is_pseudo)
     reliability_weight = teacher_background_scores[select_unsupervised_background] \
                          / (torch.sum(teacher_background_scores[select_unsupervised_background]) + epsilon)
-    supervised_background_loss = torch.mean(unweighted_loss[select_supervised_background])
-    unsupervised_background_loss = torch.mean(reliability_weight * unweighted_loss[select_unsupervised_background])
+    device = unweighted_loss.device
+    if torch.numel(unweighted_loss[select_supervised_background]) > 0:
+        supervised_background_loss = torch.mean(unweighted_loss[select_supervised_background])
+    else:
+        supervised_background_loss = torch.tensor(0., device=device)
+    if torch.numel(unweighted_loss[select_unsupervised_background]) > 0:
+        unsupervised_background_loss = torch.mean(reliability_weight * unweighted_loss[select_unsupervised_background])
+    else:
+        unsupervised_background_loss = torch.tensor(0., device=device)
 
     select_supervised_foreground = torch.logical_and(select_foreground, torch.logical_not(is_pseudo))
     select_unsupervised_foreground = torch.logical_and(select_foreground, is_pseudo)
-    supervised_foreground_loss = torch.mean(unweighted_loss[select_supervised_foreground])
-    unsupervised_foreground_loss = torch.mean(unweighted_loss[select_unsupervised_foreground])
+    if torch.numel(unweighted_loss[select_supervised_foreground]) > 0:
+        supervised_foreground_loss = torch.mean(unweighted_loss[select_supervised_foreground])
+    else:
+        supervised_foreground_loss = torch.tensor(0., device=device)
+    if torch.numel(unweighted_loss[select_unsupervised_foreground]) > 0:
+        unsupervised_foreground_loss = torch.mean(unweighted_loss[select_unsupervised_foreground])
+    else:
+        unsupervised_foreground_loss = torch.tensor(0., device=device)
 
     # TODO: Maybe divide by 4 to not destroy equilibrium between classification and regression loss (own addition)
     supervised_loss = supervised_foreground_loss + supervised_background_loss
