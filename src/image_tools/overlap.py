@@ -18,6 +18,10 @@ def clean_pseudo_labels(raw_x_pseudo, y, iou_threshold: float = 0.7):
         labels = torch.cat([ground_truth_sample['labels'], predicted_sample['labels']])
         area = torch.cat([ground_truth_sample['area'], batched_area_calculation(predicted_sample['boxes'])])
         is_crowd = torch.zeros(len(boxes), dtype=torch.uint8, device=device)
+        is_pseudo = torch.cat([
+            torch.zeros(len(ground_truth_sample['boxes'])),
+            torch.ones(len(predicted_sample['boxes']))
+        ])
         keep_indices = batched_nms(
             boxes=boxes,
             scores=scores,
@@ -29,6 +33,7 @@ def clean_pseudo_labels(raw_x_pseudo, y, iou_threshold: float = 0.7):
         ground_truth_sample['labels'] = labels[keep_indices]
         ground_truth_sample['area'] = area[keep_indices]
         ground_truth_sample['iscrowd'] = is_crowd[keep_indices]
+        ground_truth_sample['is_pseudo'] = is_pseudo[keep_indices]
     return y
 
 

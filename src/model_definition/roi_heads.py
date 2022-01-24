@@ -13,9 +13,11 @@ import src.model_definition._utils as det_utils
 
 from typing import Optional, List, Dict, Tuple
 
+from src.loss.soft_teacher import soft_teacher_classification_loss
 
-def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
-    # type: (Tensor, Tensor, List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor]
+
+def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo):
+    # type: (Tensor, Tensor, List[Tensor], List[Tensor], Tensor, List[Tensor]) -> Tuple[Tensor, Tensor]
     """class_logits * one_hot_labels
     Computes the loss for Faster R-CNN.
 
@@ -24,6 +26,8 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
         box_regression (Tensor)
         labels (list[BoxList])
         regression_targets (Tensor)
+        teacher_background_scores (Tensor)
+        is_pseudo (Tensor)
 
     Returns:
         classification_loss (Tensor)
@@ -32,26 +36,28 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
 
     labels = torch.cat(labels, dim=0)
     regression_targets = torch.cat(regression_targets, dim=0)
+    is_pseudo = torch.cat(is_pseudo, dim=0)
 
     # Focal loss start
-    alpha = 0.25
-    gamma = 2.
-
-    epsilon = 10e-5
-
-    one_hot_labels = nn.functional.one_hot(labels, num_classes=16)
-    class_probabilities = nn.functional.softmax(class_logits, dim=-1)
-    p_t = torch.sum(class_probabilities * one_hot_labels, dim=-1) + epsilon
-    focal_loss = -torch.log(p_t) * ((1 - p_t) ** gamma)
-
-    if alpha >= 0:
-        # alpha_t = alpha * one_hot_labels + (1 - alpha) * (1 - one_hot_labels)
-        focal_loss = alpha * focal_loss
-
-    focal_loss = focal_loss.mean()
+    # alpha = 0.25
+    # gamma = 2.
+    #
+    # epsilon = 10e-5
+    #
+    # one_hot_labels = nn.functional.one_hot(labels, num_classes=16)
+    # class_probabilities = nn.functional.softmax(class_logits, dim=-1)
+    # p_t = torch.sum(class_probabilities * one_hot_labels, dim=-1) + epsilon
+    # focal_loss = -torch.log(p_t) * ((1 - p_t) ** gamma)
+    #
+    # if alpha >= 0:
+    #     # alpha_t = alpha * one_hot_labels + (1 - alpha) * (1 - one_hot_labels)
+    #     focal_loss = alpha * focal_loss
+    #
+    # focal_loss = focal_loss.mean()
     # Focal loss end
 
-    # classification_loss = F.cross_entropy(class_logits, labels)
+    # SoftTeacher weighting:
+    classification_loss = soft_teacher_classification_loss(class_logits, labels, teacher_background_scores, is_pseudo)
 
     # get indices that correspond to the regression targets for
     # the corresponding ground truth labels, to be used with
@@ -69,8 +75,8 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
     )
     box_loss = box_loss / labels.numel()
 
-    # return classification_loss, box_loss
-    return focal_loss, box_loss
+    return classification_loss, box_loss
+    # return focal_loss, box_loss
 
 
 def maskrcnn_inference(x, labels):
@@ -649,14 +655,19 @@ class RoIHeads(nn.Module):
                                 proposals,  # type: List[Tensor]
                                 targets     # type: Optional[List[Dict[str, Tensor]]]
                                 ):
-        # type: (...) -> Tuple[List[Tensor], List[Tensor], List[Tensor], List[Tensor]]
+        # type: (...) -> Tuple[List[Tensor], List[Tensor], List[Tensor], List[Tensor], List[Tensor]]
         self.check_targets(targets)
         assert targets is not None
         dtype = proposals[0].dtype
         device = proposals[0].device
 
-        gt_boxes = [t["boxes"].to(dtype) for t in targets]
-        gt_labels = [t["labels"] for t in targets]
+        gt_boxes = []
+        gt_labels = []
+        gt_is_pseudo = []
+        for t in targets:
+            gt_boxes.append(t["boxes"].to(dtype))
+            gt_labels.append(t["labels"])
+            gt_is_pseudo.append(t["is_pseudo"])
 
         # append ground-truth bboxes to propos
         proposals = self.add_gt_proposals(proposals, gt_boxes)
@@ -666,6 +677,7 @@ class RoIHeads(nn.Module):
         # sample a fixed proportion of positive-negative proposals
         sampled_inds = self.subsample(labels)
         matched_gt_boxes = []
+        matched_is_pseudo = []
         num_images = len(proposals)
         for img_id in range(num_images):
             img_sampled_inds = sampled_inds[img_id]
@@ -674,12 +686,14 @@ class RoIHeads(nn.Module):
             matched_idxs[img_id] = matched_idxs[img_id][img_sampled_inds]
 
             gt_boxes_in_image = gt_boxes[img_id]
+            gt_is_pseudo_in_image = gt_is_pseudo[img_id]
             if gt_boxes_in_image.numel() == 0:
                 gt_boxes_in_image = torch.zeros((1, 4), dtype=dtype, device=device)
             matched_gt_boxes.append(gt_boxes_in_image[matched_idxs[img_id]])
+            matched_is_pseudo.append(gt_is_pseudo_in_image[matched_idxs[img_id]])
 
         regression_targets = self.box_coder.encode(matched_gt_boxes, proposals)
-        return proposals, matched_idxs, labels, regression_targets
+        return proposals, matched_idxs, labels, regression_targets, matched_is_pseudo
 
     def postprocess_detections(self,
                                class_logits,    # type: Tensor
@@ -743,7 +757,8 @@ class RoIHeads(nn.Module):
                 features,      # type: Dict[str, Tensor]
                 proposals,     # type: List[Tensor]
                 image_shapes,  # type: List[Tuple[int, int]]
-                targets=None   # type: Optional[List[Dict[str, Tensor]]]
+                targets=None,   # type: Optional[List[Dict[str, Tensor]]]
+                teacher_box_predictor=None,     # type: nn.Module
                 ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
         """
@@ -752,6 +767,7 @@ class RoIHeads(nn.Module):
             proposals (List[Tensor[N, 4]])
             image_shapes (List[Tuple[H, W]])
             targets (List[Dict])
+            teacher_box_predictor
         """
         if targets is not None:
             for t in targets:
@@ -763,7 +779,7 @@ class RoIHeads(nn.Module):
                     assert t["keypoints"].dtype == torch.float32, 'target keypoints must of float type'
 
         if self.training:
-            proposals, matched_idxs, labels, regression_targets = self.select_training_samples(proposals, targets)
+            proposals, matched_idxs, labels, regression_targets, is_pseudo = self.select_training_samples(proposals, targets)
         else:
             labels = None
             regression_targets = None
@@ -777,8 +793,11 @@ class RoIHeads(nn.Module):
         losses = {}
         if self.training:
             assert labels is not None and regression_targets is not None
+            # SoftTeacher: Use teacher head to weight loss
+            teacher_class_logits, teacher_box_regression = teacher_box_predictor(box_features)
+            teacher_background_scores = F.softmax(teacher_class_logits, -1)[:, 0]
             loss_classifier, loss_box_reg = fastrcnn_loss(
-                class_logits, box_regression, labels, regression_targets)
+                class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo)
             losses = {
                 "loss_classifier": loss_classifier,
                 "loss_box_reg": loss_box_reg

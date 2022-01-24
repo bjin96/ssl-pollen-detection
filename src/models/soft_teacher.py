@@ -27,8 +27,8 @@ class SoftTeacher(pl.LightningModule):
         self.batch_size = batch_size
 
         self.student = PretrainedEfficientNetV2(
-            Augsburg15DetectionDataset.NUM_CLASSES,
-            batch_size=4
+            num_classes=num_classes,
+            batch_size=batch_size
         )
         self.teacher = deepcopy(self.student)
         self.teacher.freeze()
@@ -43,9 +43,9 @@ class SoftTeacher(pl.LightningModule):
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
         self.exponential_moving_average.update_teacher()
 
-    def forward(self, x, y=None):
+    def forward(self, x, y=None, teacher_box_predictor=None):
 
-        y_labelled = self.student(x, y)
+        y_labelled = self.student(x, y, teacher_box_predictor)
 
         # TODO Weighting supervised + unsupervised loss: now both are handled equally.
 
@@ -71,7 +71,7 @@ class SoftTeacher(pl.LightningModule):
         raw_x_pseudo = self.teacher(images)
         cleaned_y_pseudo = clean_pseudo_labels(raw_x_pseudo, targets)
 
-        loss_dict = self(images, cleaned_y_pseudo)
+        loss_dict = self(images, cleaned_y_pseudo, self.teacher.model.roi_heads.box_predictor)
 
         total_loss = sum(loss for loss in loss_dict.values())
         self.log('train_loss', total_loss, on_step=True, batch_size=self.batch_size)
