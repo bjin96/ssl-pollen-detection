@@ -38,7 +38,8 @@ class SoftTeacher(pl.LightningModule):
         # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
         self.exponential_moving_average = ExponentialMovingAverage(self.student, self.teacher, decay=0.99)
 
-        self.class_mean_average_precision = MeanAveragePrecision(class_metrics=True)
+        self.validation_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
+        self.test_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
 
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
         self.exponential_moving_average.update_teacher()
@@ -48,9 +49,6 @@ class SoftTeacher(pl.LightningModule):
         y_labelled = self.student(x, y, teacher_box_predictor)
 
         # TODO Weighting supervised + unsupervised loss: now both are handled equally.
-
-        # Soft teacher: use classification head of teacher to weight the loss: if teacher sure about a false negative
-        # weight lower.
 
         # Box jittering: use box regression head of teacher (multiple times with different starting points) and look if
         # it comes to the same result (-> reliable regression, higher weight).
@@ -80,15 +78,24 @@ class SoftTeacher(pl.LightningModule):
     def validation_step(self, batch, batch_idx) -> Optional[STEP_OUTPUT]:
         images, targets = batch
         predictions = self(images, targets)
-        self._log_metrics(predictions, targets)
+        self.validation_mean_average_precision(predictions, targets)
+
+    def on_validation_end(self) -> None:
+        metrics = self.validation_mean_average_precision.compute()
+        self._log_metrics(metrics)
+        self.validation_mean_average_precision.reset()
 
     def test_step(self, batch, batch_idx):
         images, targets = batch
         predictions = self(images, targets)
-        self._log_metrics(predictions, targets)
+        self.test_mean_average_precision(predictions, targets)
 
-    def _log_metrics(self, predictions, targets):
-        mean_average_precision = self.class_mean_average_precision(predictions, targets)
+    def on_test_end(self) -> None:
+        metrics = self.test_mean_average_precision.compute()
+        self._log_metrics(metrics)
+        self.test_mean_average_precision.reset()
+
+    def _log_metrics(self, mean_average_precision):
         self.log('map@0.50:0.95', mean_average_precision['map'], on_epoch=True, batch_size=self.batch_size)
         self.log('map@0.50', mean_average_precision['map_50'], on_epoch=True, batch_size=self.batch_size)
         self.log('map@0.75', mean_average_precision['map_75'], on_epoch=True, batch_size=self.batch_size)
@@ -101,8 +108,18 @@ class SoftTeacher(pl.LightningModule):
         self.log('mar_small', mean_average_precision['mar_small'], on_epoch=True, batch_size=self.batch_size)
         self.log('mar_medium', mean_average_precision['mar_medium'], on_epoch=True, batch_size=self.batch_size)
         self.log('mar_large', mean_average_precision['mar_large'], on_epoch=True, batch_size=self.batch_size)
-        self.log('map_per_class', mean_average_precision['map_per_class'], on_epoch=True, batch_size=self.batch_size)
-        self.log('mar_100_per_class', mean_average_precision['mar_100_per_class'], on_epoch=True, batch_size=self.batch_size)
+
+        for index, label in enumerate(Augsburg15DetectionDataset.INVERSE_CLASS_MAPPING):
+            self.log(
+                f'map_{label}', mean_average_precision['map_per_class'][index],
+                on_epoch=True,
+                batch_size=self.batch_size
+            )
+            self.log(
+                f'mar_100_{label}', mean_average_precision['mar_100_per_class'][index],
+                on_epoch=True,
+                batch_size=self.batch_siz
+            )
 
     def configure_optimizers(self):
         optimizer = Adam(self.parameters(), lr=0.0001)
