@@ -12,7 +12,7 @@ from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate
 from src.image_tools.overlap import clean_pseudo_labels
 from src.models.exponential_moving_average import ExponentialMovingAverage
 from src.models.faster_rcnn import PretrainedEfficientNetV2
-from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip
+from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip
 
 
 class SoftTeacher(pl.LightningModule):
@@ -30,6 +30,9 @@ class SoftTeacher(pl.LightningModule):
             num_classes=num_classes,
             batch_size=batch_size
         )
+        # Only use high confidence box predictions for inference.
+        self.student.model.roi_heads.score_thresh = 0.9
+
         self.teacher = deepcopy(self.student)
         self.teacher.freeze()
         # Only use high confidence additional pseudo boxes.
@@ -48,8 +51,6 @@ class SoftTeacher(pl.LightningModule):
 
         y_labelled = self.student(x, y, teacher_box_predictor)
 
-        # TODO Weighting supervised + unsupervised loss: now both are handled equally.
-
         # Box jittering: use box regression head of teacher (multiple times with different starting points) and look if
         # it comes to the same result (-> reliable regression, higher weight).
         return y_labelled
@@ -63,7 +64,7 @@ class SoftTeacher(pl.LightningModule):
         images, targets = batch
 
         # TODO Depends on consistency regularization: ideally, there should be a weakly augmented batch (for the
-        # TODO teacher) and a strongly augmented batch (for the student).
+        # TODO teacher) and a strongly augmented batch (for the student) https://arxiv.org/pdf/2001.07685.pdf.
 
         # Originally, this would be two different batches, labelled + unlabelled.
         raw_x_pseudo = self.teacher(images)
@@ -96,30 +97,13 @@ class SoftTeacher(pl.LightningModule):
         self.test_mean_average_precision.reset()
 
     def _log_metrics(self, mean_average_precision):
-        self.log('map@0.50:0.95', mean_average_precision['map'], on_epoch=True, batch_size=self.batch_size)
-        self.log('map@0.50', mean_average_precision['map_50'], on_epoch=True, batch_size=self.batch_size)
-        self.log('map@0.75', mean_average_precision['map_75'], on_epoch=True, batch_size=self.batch_size)
-        self.log('map_small', mean_average_precision['map_small'], on_epoch=True, batch_size=self.batch_size)
-        self.log('map_medium', mean_average_precision['map_medium'], on_epoch=True, batch_size=self.batch_size)
-        self.log('map_large', mean_average_precision['map_large'], on_epoch=True, batch_size=self.batch_size)
-        self.log('mar@1', mean_average_precision['mar_1'], on_epoch=True, batch_size=self.batch_size)
-        self.log('mar@10', mean_average_precision['mar_10'], on_epoch=True, batch_size=self.batch_size)
-        self.log('mar@100', mean_average_precision['mar_100'], on_epoch=True, batch_size=self.batch_size)
-        self.log('mar_small', mean_average_precision['mar_small'], on_epoch=True, batch_size=self.batch_size)
-        self.log('mar_medium', mean_average_precision['mar_medium'], on_epoch=True, batch_size=self.batch_size)
-        self.log('mar_large', mean_average_precision['mar_large'], on_epoch=True, batch_size=self.batch_size)
-
-        for index, label in enumerate(Augsburg15DetectionDataset.INVERSE_CLASS_MAPPING):
-            self.log(
-                f'map_{label}', mean_average_precision['map_per_class'][index],
-                on_epoch=True,
-                batch_size=self.batch_size
-            )
-            self.log(
-                f'mar_100_{label}', mean_average_precision['mar_100_per_class'][index],
-                on_epoch=True,
-                batch_size=self.batch_siz
-            )
+        for index, value in enumerate(mean_average_precision['map_per_class']):
+            mean_average_precision[f'map_per_class_{index}'] = value
+        for index, value in enumerate(mean_average_precision['mar_100_per_class']):
+            mean_average_precision[f'mar_100_per_class_{index}'] = value
+        del mean_average_precision['map_per_class']
+        del mean_average_precision['mar_100_per_class']
+        self.logger.log_metrics(mean_average_precision)
 
     def configure_optimizers(self):
         optimizer = Adam(self.parameters(), lr=0.0001)
@@ -129,7 +113,7 @@ class SoftTeacher(pl.LightningModule):
         train_dataset = Augsburg15DetectionDataset(
             root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
             image_info_csv='pollen15_train_annotations_preprocessed.csv',
-            transforms=Compose([ToTensor(), RandomHorizontalFlip(0.5)])
+            transforms=Compose([ToTensor(), RandomHorizontalFlip(0.5), RandomVerticalFlip(0.5)])
         )
         return DataLoader(
             train_dataset,
