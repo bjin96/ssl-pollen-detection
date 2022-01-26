@@ -3,6 +3,8 @@ from copy import deepcopy
 from typing import Optional
 
 import pytorch_lightning as pl
+import torch
+import torchvision.transforms
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT
 from torch.optim import Optimizer, Adam
 from torch.utils.data import DataLoader
@@ -65,9 +67,19 @@ class SoftTeacher(pl.LightningModule):
 
         # TODO Depends on consistency regularization: ideally, there should be a weakly augmented batch (for the
         # TODO teacher) and a strongly augmented batch (for the student) https://arxiv.org/pdf/2001.07685.pdf.
+        # Augment teacher images:
+        teacher_augmenter = torchvision.transforms.Compose([
+            torchvision.transforms.RandomSolarize(threshold=float(torch.rand(1).numpy()), p=0.25),
+            torchvision.transforms.RandomApply(
+                [torchvision.transforms.ColorJitter(brightness=(0., 1.), contrast=(0., 1.))],
+                p=0.25
+            ),
+            torchvision.transforms.RandomAdjustSharpness(sharpness_factor=float(torch.rand(1)), p=0.25),
+        ])
+        teacher_images = teacher_augmenter(images)
 
         # Originally, this would be two different batches, labelled + unlabelled.
-        raw_x_pseudo = self.teacher(images)
+        raw_x_pseudo = self.teacher(teacher_images)
         cleaned_y_pseudo = clean_pseudo_labels(raw_x_pseudo, targets)
 
         loss_dict = self(images, cleaned_y_pseudo, self.teacher.model.roi_heads.box_predictor)
