@@ -11,9 +11,6 @@ from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate
 import matplotlib.pyplot as plt
 from matplotlib import patches
 
-# Use boxes with higher confidence only.
-SCORE_THRESHOLD = 0.5
-
 
 def plot_annotated_images(checkpoint_path: str, model_class: Type[LightningModule]):
     validation_dataset = Augsburg15DetectionDataset(
@@ -63,9 +60,6 @@ def plot_bounding_box_image(image, bounding_boxes, labels, scores, ground_truth_
 
 def _plot_bounding_boxes(bounding_boxes, labels, scores, ax, color):
     for bounding_box, label, score in zip(bounding_boxes, labels, scores):
-        if score < SCORE_THRESHOLD:
-            continue
-
         width = bounding_box[2] - bounding_box[0]
         height = bounding_box[3] - bounding_box[1]
 
@@ -84,12 +78,12 @@ def _plot_bounding_boxes(bounding_boxes, labels, scores, ax, color):
         ax.text(
             bounding_box[0],
             label_y,
-            Augsburg15DetectionDataset.INVERSE_CLASS_MAPPING[int(label)],
+            f'{Augsburg15DetectionDataset.INVERSE_CLASS_MAPPING[int(label)]} {score:.2f}',
             color='white',
             bbox=dict(facecolor=color, edgecolor=color)
         )
 
 
 if __name__ == '__main__':
-    CKPT_PATH = '../../lightning_logs/soft_teacher_#74301e48/checkpoints/epoch=3-step=5907.ckpt'
+    CKPT_PATH = '../../lightning_logs/soft_teacher_loss_weights#25b59bef/checkpoints/epoch=15-step=11807.ckpt'
     plot_annotated_images(CKPT_PATH, SoftTeacher)
