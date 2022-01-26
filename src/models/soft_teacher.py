@@ -115,7 +115,7 @@ class SoftTeacher(pl.LightningModule):
             mean_average_precision[f'mar_100_per_class_{index}'] = value
         del mean_average_precision['map_per_class']
         del mean_average_precision['mar_100_per_class']
-        self.logger.log_metrics(mean_average_precision)
+        self.logger.log_metrics(mean_average_precision, step=self.global_step)
 
     def configure_optimizers(self):
         optimizer = Adam(self.parameters(), lr=0.0001)
