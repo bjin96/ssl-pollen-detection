@@ -24,6 +24,7 @@ class SoftTeacher(pl.LightningModule):
 
     def __init__(self, num_classes, batch_size):
         super(SoftTeacher, self).__init__()
+        self.save_hyperparameters()
 
         self.num_classes = num_classes
         self.batch_size = batch_size
