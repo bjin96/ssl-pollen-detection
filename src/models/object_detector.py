@@ -26,8 +26,8 @@ class ObjectDetector(LightningModule):
     def define_model(self):
         pass
 
-    def forward(self, images, targets=None, teacher_box_predictor=None) -> Any:
-        return self.model(images, targets, teacher_box_predictor)
+    def forward(self, images, targets=None, teacher_box_predictor=None, unsupervised_loss_weight=1.0) -> Any:
+        return self.model(images, targets, teacher_box_predictor, unsupervised_loss_weight)
 
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
         images, targets = batch

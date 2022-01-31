@@ -16,8 +16,9 @@ from typing import Optional, List, Dict, Tuple
 from src.loss.soft_teacher import soft_teacher_classification_loss
 
 
-def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo):
-    # type: (Tensor, Tensor, List[Tensor], List[Tensor], Tensor, List[Tensor]) -> Tuple[Tensor, Tensor]
+def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo,
+                  unsupervised_loss_weight):
+    # type: (Tensor, Tensor, List[Tensor], List[Tensor], Tensor, List[Tensor], float) -> Tuple[Tensor, Tensor]
     """class_logits * one_hot_labels
     Computes the loss for Faster R-CNN.
 
@@ -28,6 +29,7 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teac
         regression_targets (Tensor)
         teacher_background_scores (Tensor)
         is_pseudo (Tensor)
+        unsupervised_loss_weight (float)
 
     Returns:
         classification_loss (Tensor)
@@ -57,7 +59,13 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teac
     # Focal loss end
 
     # SoftTeacher weighting:
-    classification_loss = soft_teacher_classification_loss(class_logits, labels, teacher_background_scores, is_pseudo)
+    classification_loss = soft_teacher_classification_loss(
+        class_logits=class_logits,
+        labels=labels,
+        teacher_background_scores=teacher_background_scores,
+        is_pseudo=is_pseudo,
+        unsupervised_loss_weight=unsupervised_loss_weight
+    )
 
     # get indices that correspond to the regression targets for
     # the corresponding ground truth labels, to be used with
@@ -759,6 +767,7 @@ class RoIHeads(nn.Module):
                 image_shapes,  # type: List[Tuple[int, int]]
                 targets=None,   # type: Optional[List[Dict[str, Tensor]]]
                 teacher_box_predictor=None,     # type: nn.Module
+                unsupervised_loss_weight=1.0    # type: float
                 ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
         """
@@ -768,6 +777,7 @@ class RoIHeads(nn.Module):
             image_shapes (List[Tuple[H, W]])
             targets (List[Dict])
             teacher_box_predictor
+            unsupervised_loss_weight
         """
         if targets is not None:
             for t in targets:
@@ -797,7 +807,8 @@ class RoIHeads(nn.Module):
             teacher_class_logits, teacher_box_regression = teacher_box_predictor(box_features)
             teacher_background_scores = F.softmax(teacher_class_logits, -1)[:, 0]
             loss_classifier, loss_box_reg = fastrcnn_loss(
-                class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo)
+                class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo,
+                unsupervised_loss_weight)
             losses = {
                 "loss_classifier": loss_classifier,
                 "loss_box_reg": loss_box_reg

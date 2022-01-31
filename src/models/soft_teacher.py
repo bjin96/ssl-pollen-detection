@@ -22,24 +22,32 @@ class SoftTeacher(pl.LightningModule):
     Adapted SoftTeacher model from https://arxiv.org/abs/2106.09018.
     """
 
-    def __init__(self, num_classes, batch_size):
+    def __init__(
+            self,
+            num_classes: int,
+            batch_size: int,
+            teacher_pseudo_threshold: float,
+            student_inference_threshold: float,
+            unsupervised_loss_weight: float,
+    ):
         super(SoftTeacher, self).__init__()
         self.save_hyperparameters()
 
         self.num_classes = num_classes
         self.batch_size = batch_size
+        self.unsupervised_loss_weight = unsupervised_loss_weight
 
         self.student = PretrainedEfficientNetV2(
             num_classes=num_classes,
             batch_size=batch_size
         )
         # Only use high confidence box predictions for inference.
-        self.student.model.roi_heads.score_thresh = 0.9
+        self.student.model.roi_heads.score_thresh = student_inference_threshold
 
         self.teacher = deepcopy(self.student)
         self.teacher.freeze()
         # Only use high confidence additional pseudo boxes.
-        self.teacher.model.roi_heads.score_thresh = 0.9
+        self.teacher.model.roi_heads.score_thresh = teacher_pseudo_threshold
         self.teacher.eval()
         # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
         self.exponential_moving_average = ExponentialMovingAverage(self.student, self.teacher, decay=0.99)
@@ -52,7 +60,7 @@ class SoftTeacher(pl.LightningModule):
 
     def forward(self, x, y=None, teacher_box_predictor=None):
 
-        y_labelled = self.student(x, y, teacher_box_predictor)
+        y_labelled = self.student(x, y, teacher_box_predictor, self.unsupervised_loss_weight)
 
         # Box jittering: use box regression head of teacher (multiple times with different starting points) and look if
         # it comes to the same result (-> reliable regression, higher weight).
