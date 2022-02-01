@@ -1,11 +1,10 @@
 import os
 from copy import deepcopy
-from typing import Optional
 
 import pytorch_lightning as pl
 import torch
 import torchvision.transforms
-from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT
+from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT, EPOCH_OUTPUT
 from torch.optim import Optimizer, Adam
 from torch.utils.data import DataLoader
 from torchmetrics.detection.map import MeanAveragePrecision
@@ -100,26 +99,30 @@ class SoftTeacher(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         images, targets = batch
         predictions = self(images, targets)
-        self.validation_mean_average_precision(predictions, targets)
-        self.log(
-            name='validation_mean_average_precision',
-            value=self.validation_mean_average_precision,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True
-        )
+        validation_mean_average_precision = self.validation_mean_average_precision(predictions, targets)
+        self.log('validation_map@0.50:0.95', validation_mean_average_precision['map'], on_epoch=True, prog_bar=True)
+        self.log('validation_map@0.50', validation_mean_average_precision['map_50'], on_epoch=True, prog_bar=True)
+        self.log('validation_map@0.75', validation_mean_average_precision['map_75'], on_epoch=True, prog_bar=True)
+        self.log('validation_mar@1', validation_mean_average_precision['mar_1'], on_epoch=True, prog_bar=True)
+        self.log('validation_mar@10', validation_mean_average_precision['mar_10'], on_epoch=True, prog_bar=True)
+        self.log('validation_mar@100', validation_mean_average_precision['mar_100'], on_epoch=True, prog_bar=True)
+
+    def validation_epoch_end(self, outputs: EPOCH_OUTPUT) -> None:
+        self.validation_mean_average_precision.reset()
 
     def test_step(self, batch, batch_idx):
         images, targets = batch
         predictions = self(images, targets)
-        self.test_mean_average_precision(predictions, targets)
-        self.log(
-            name='test_mean_average_precision',
-            value=self.test_mean_average_precision,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True
-        )
+        test_mean_average_precision = self.test_mean_average_precision(predictions, targets)
+        self.log('test_map@0.50:0.95', test_mean_average_precision['map'], on_epoch=True, prog_bar=True)
+        self.log('test_map@0.50', test_mean_average_precision['map_50'], on_epoch=True, prog_bar=True)
+        self.log('test_map@0.75', test_mean_average_precision['map_75'], on_epoch=True, prog_bar=True)
+        self.log('test_mar@1', test_mean_average_precision['mar_1'], on_epoch=True, prog_bar=True)
+        self.log('test_mar@10', test_mean_average_precision['mar_10'], on_epoch=True, prog_bar=True)
+        self.log('test_mar@100', test_mean_average_precision['mar_100'], on_epoch=True, prog_bar=True)
+
+    def test_epoch_end(self, outputs: EPOCH_OUTPUT) -> None:
+        self.test_mean_average_precision.reset()
 
     def configure_optimizers(self):
         optimizer = Adam(self.parameters(), lr=0.0001)
