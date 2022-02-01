@@ -52,8 +52,8 @@ class SoftTeacher(pl.LightningModule):
         # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
         self.exponential_moving_average = ExponentialMovingAverage(self.student, self.teacher, decay=0.99)
 
-        self.validation_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
-        self.test_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
+        self.validation_mean_average_precision = MeanAveragePrecision()
+        self.test_mean_average_precision = MeanAveragePrecision()
 
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
         self.exponential_moving_average.update_teacher()
@@ -97,34 +97,29 @@ class SoftTeacher(pl.LightningModule):
         self.log('train_loss', total_loss, on_step=True, batch_size=self.batch_size)
         return total_loss
 
-    def validation_step(self, batch, batch_idx) -> Optional[STEP_OUTPUT]:
+    def validation_step(self, batch, batch_idx):
         images, targets = batch
         predictions = self(images, targets)
         self.validation_mean_average_precision(predictions, targets)
-
-    def on_validation_end(self) -> None:
-        metrics = self.validation_mean_average_precision.compute()
-        self._log_metrics(metrics)
-        self.validation_mean_average_precision.reset()
+        self.log(
+            name='validation_mean_average_precision',
+            value=self.validation_mean_average_precision,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True
+        )
 
     def test_step(self, batch, batch_idx):
         images, targets = batch
         predictions = self(images, targets)
         self.test_mean_average_precision(predictions, targets)
-
-    def on_test_end(self) -> None:
-        metrics = self.test_mean_average_precision.compute()
-        self._log_metrics(metrics)
-        self.test_mean_average_precision.reset()
-
-    def _log_metrics(self, mean_average_precision):
-        for index, value in enumerate(mean_average_precision['map_per_class']):
-            mean_average_precision[f'map_per_class_{index}'] = value
-        for index, value in enumerate(mean_average_precision['mar_100_per_class']):
-            mean_average_precision[f'mar_100_per_class_{index}'] = value
-        del mean_average_precision['map_per_class']
-        del mean_average_precision['mar_100_per_class']
-        self.logger.log_metrics(mean_average_precision, step=self.global_step)
+        self.log(
+            name='test_mean_average_precision',
+            value=self.test_mean_average_precision,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True
+        )
 
     def configure_optimizers(self):
         optimizer = Adam(self.parameters(), lr=0.0001)
@@ -143,14 +138,9 @@ class SoftTeacher(pl.LightningModule):
             drop_last=True,
             shuffle=True,
             num_workers=4,
-            # sampler=WeightedRandomSampler(
-            #     weights=train_dataset.get_mean_sample_weights(),
-            #     num_samples=100,
-            #     replacement=True
-            # )
         )
 
-    def test_dataloader(self) -> EVAL_DATALOADERS:
+    def val_dataloader(self) -> EVAL_DATALOADERS:
         validation_dataset = Augsburg15DetectionDataset(
             root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
             image_info_csv='pollen15_val_annotations_preprocessed.csv',
@@ -164,10 +154,10 @@ class SoftTeacher(pl.LightningModule):
             num_workers=4
         )
 
-    def val_dataloader(self) -> EVAL_DATALOADERS:
+    def test_dataloader(self) -> EVAL_DATALOADERS:
         validation_dataset = Augsburg15DetectionDataset(
             root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
-            image_info_csv='pollen15_val_annotations_preprocessed.csv',
+            image_info_csv='pollen15_test_annotations_preprocessed.csv',
             transforms=ToTensor()
         )
         return DataLoader(
