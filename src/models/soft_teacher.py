@@ -1,5 +1,6 @@
 import os
 from copy import deepcopy
+from typing import Tuple
 
 import pytorch_lightning as pl
 import torch
@@ -13,7 +14,7 @@ from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate
 from src.image_tools.overlap import clean_pseudo_labels
 from src.models.exponential_moving_average import ExponentialMovingAverage
 from src.models.faster_rcnn import PretrainedEfficientNetV2
-from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip
+from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation
 
 
 class SoftTeacher(pl.LightningModule):
@@ -28,6 +29,7 @@ class SoftTeacher(pl.LightningModule):
             teacher_pseudo_threshold: float,
             student_inference_threshold: float,
             unsupervised_loss_weight: float,
+            image_size: Tuple[int],
     ):
         super(SoftTeacher, self).__init__()
         self.save_hyperparameters()
@@ -35,6 +37,7 @@ class SoftTeacher(pl.LightningModule):
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.unsupervised_loss_weight = unsupervised_loss_weight
+        self.image_size = image_size
 
         self.student = PretrainedEfficientNetV2(
             num_classes=num_classes,
@@ -132,7 +135,9 @@ class SoftTeacher(pl.LightningModule):
         train_dataset = Augsburg15DetectionDataset(
             root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
             image_info_csv='pollen15_train_annotations_preprocessed.csv',
-            transforms=Compose([ToTensor(), RandomHorizontalFlip(0.5), RandomVerticalFlip(0.5)])
+            transforms=Compose([
+                ToTensor(), RandomHorizontalFlip(0.5), RandomVerticalFlip(0.5), RandomRotation(0.5, 25, self.image_size)
+            ])
         )
         return DataLoader(
             train_dataset,

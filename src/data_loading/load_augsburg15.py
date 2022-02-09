@@ -64,6 +64,7 @@ class Augsburg15DetectionDataset(Dataset):
         1 / 1712,
     ]
     NUM_CLASSES = 16
+    IMAGE_SIZE = (1280, 960)
 
     def __init__(self, root_directory, image_info_csv, transforms=None):
         self.transforms = transforms
