@@ -1,35 +1,13 @@
-import torch
-from torch.utils.data import DataLoader
+from pathlib import Path
 
-from src.training.engine import evaluate
-from fine_tune_faster_rcnn import get_fasterrcnn_model
-from src.training.transforms import ToTensor
-import os
-from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
+from pytorch_lightning import Trainer
 
-
-def evaluate_saved_model(saved_model_path):
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
-    validation_dataset = Augsburg15DetectionDataset(
-        root_directory=os.path.join('../datasets/pollen_only'),
-        image_info_csv='pollen15_val_annotations_preprocessed.csv',
-        transforms=ToTensor()
-    )
-    validation_loader = DataLoader(
-        validation_dataset,
-        batch_size=16,
-        collate_fn=collate_augsburg15_detection,
-        drop_last=True,
-        num_workers=4
-    )
-
-    model = get_fasterrcnn_model()
-    model.load_state_dict(torch.load(saved_model_path))
-    model.to(device)
-
-    evaluate(model, validation_loader, device)
+from src.models.soft_teacher import SoftTeacher
 
 
 if __name__ == '__main__':
-    evaluate_saved_model('../models/model_epoch_25')
+    log_directory = Path(__file__).parents[2] / 'logs'
+    ckpt_path = log_directory / 'soft_teacher#352b63b/version_0/checkpoints/epoch=18-step=14021.ckpt'
+    model = SoftTeacher.load_from_checkpoint(ckpt_path)
+    trainer = Trainer(max_epochs=1)
+    test = trainer.validate(model, model.val_dataloader())
