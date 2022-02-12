@@ -70,16 +70,21 @@ class RandomRotation(object):
         if random.random() < self.prob:
             degree = float(torch.rand(1)) * 2 * self.degree_range - self.degree_range
             image = F.rotate(image, angle=degree)
-            target['boxes'] = self._rotate_coordinates(
+            target['boxes'], inside_mask = self._rotate_coordinates(
                 box_coordinates=target['boxes'],
                 x_center=self.image_size[0] / 2,
                 y_center=self.image_size[1] / 2,
                 degree=degree
             )
+            target['boxes'] = target['boxes'][inside_mask]
+            target['labels'] = target['labels'][inside_mask]
+            target['area'] = target['area'][inside_mask]
+            target['iscrowd'] = target['iscrowd'][inside_mask]
+
         return image, target
 
-    @staticmethod
     def _rotate_coordinates(
+            self,
             box_coordinates: Tensor,
             x_center: float,
             y_center: float,
@@ -89,7 +94,7 @@ class RandomRotation(object):
         Rotates bounding box coordinates around the center.
 
         Rotates the original bounding box and encloses the resulting box with a new box that is parallel to the image
-        border.
+        border. Marks a box if it leaves the image boundaries.
 
         Args:
             box_coordinates: Coordinates of the form [[x1, y1, x2, y3], ...] where (x1, y1) denotes the upper left
@@ -99,7 +104,8 @@ class RandomRotation(object):
             degree: Degree for which to rotate the coordinates counter-clockwise.
 
         Returns:
-
+            box_coordinates: New coordinates for the bounding box after rotation.
+            inside_mask: Boolean mask to indicate whether the box is inside the image boundaries.
         """
         # Make rotation counter-clockwise
         degree = torch.tensor(-degree)
@@ -112,9 +118,20 @@ class RandomRotation(object):
         x_rotated = x_minus_center * torch.cos(radians) - y_minus_center * torch.sin(radians) + x_center
         y_rotated = x_minus_center * torch.sin(radians) + y_minus_center * torch.cos(radians) + y_center
 
+        # TODO: Maybe do something about bigger bounding boxes...
         box_coordinates[:, 0] = torch.min(x_rotated, dim=-1)[0]
         box_coordinates[:, 2] = torch.max(x_rotated, dim=-1)[0]
         box_coordinates[:, 1] = torch.min(y_rotated, dim=-1)[0]
         box_coordinates[:, 3] = torch.max(y_rotated, dim=-1)[0]
 
-        return box_coordinates
+        horizontal_inside_mask = torch.logical_and(
+            torch.greater_equal(box_coordinates[0], 0),
+            torch.less(box_coordinates[2], self.image_size[0])
+        )
+        vertical_inside_mask = torch.logical_and(
+            torch.greater_equal(box_coordinates[1], 0),
+            torch.less(box_coordinates[3], self.image_size[1])
+        )
+        inside_mask = torch.logical_and(horizontal_inside_mask, vertical_inside_mask)
+
+        return box_coordinates, inside_mask
