@@ -697,6 +697,8 @@ class RoIHeads(nn.Module):
             gt_is_pseudo_in_image = gt_is_pseudo[img_id]
             if gt_boxes_in_image.numel() == 0:
                 gt_boxes_in_image = torch.zeros((1, 4), dtype=dtype, device=device)
+            if gt_is_pseudo_in_image.numel() == 0:
+                gt_is_pseudo_in_image = torch.zeros((1,), dtype=dtype, device=device)
             matched_gt_boxes.append(gt_boxes_in_image[matched_idxs[img_id]])
             matched_is_pseudo.append(gt_is_pseudo_in_image[matched_idxs[img_id]])
 
