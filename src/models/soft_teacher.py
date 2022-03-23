@@ -7,13 +7,15 @@ import torch
 import torchvision.transforms
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT, EPOCH_OUTPUT
 from torch.optim import Optimizer, Adam
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torchmetrics.detection.map import MeanAveragePrecision
 
 from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
 from src.image_tools.overlap import clean_pseudo_labels
 from src.models.exponential_moving_average import ExponentialMovingAverage
-from src.models.faster_rcnn import PretrainedEfficientNetV2
+from src.models.object_detector import ObjectDetector
+from src.models.timm_adapter import Network
 from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation
 
 
@@ -30,6 +32,10 @@ class SoftTeacher(pl.LightningModule):
             student_inference_threshold: float,
             unsupervised_loss_weight: float,
             image_size: Tuple[int],
+            backbone: Network,
+            min_image_size: int,
+            max_image_size: int,
+            freeze_backbone: bool = False,
     ):
         super(SoftTeacher, self).__init__()
         self.save_hyperparameters()
@@ -39,9 +45,13 @@ class SoftTeacher(pl.LightningModule):
         self.unsupervised_loss_weight = unsupervised_loss_weight
         self.image_size = image_size
 
-        self.student = PretrainedEfficientNetV2(
+        self.student = ObjectDetector(
             num_classes=num_classes,
-            batch_size=batch_size
+            batch_size=batch_size,
+            timm_model=backbone,
+            min_image_size=min_image_size,
+            max_image_size=max_image_size,
+            freeze_backbone=freeze_backbone,
         )
         # Only use high confidence box predictions for inference.
         self.student.model.roi_heads.score_thresh = student_inference_threshold
@@ -54,8 +64,8 @@ class SoftTeacher(pl.LightningModule):
         # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
         self.exponential_moving_average = ExponentialMovingAverage(self.student, self.teacher, decay=0.99)
 
-        self.validation_mean_average_precision = MeanAveragePrecision()
-        self.test_mean_average_precision = MeanAveragePrecision()
+        self.validation_mean_average_precision = MeanAveragePrecision(class_metrics=True)
+        self.test_mean_average_precision = MeanAveragePrecision(class_metrics=True)
 
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
         self.exponential_moving_average.update_teacher()
@@ -99,44 +109,57 @@ class SoftTeacher(pl.LightningModule):
         self.log('train_loss', total_loss, on_step=True, batch_size=self.batch_size)
         return total_loss
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch, batch_idx) -> None:
         images, targets = batch
         predictions = self(images, targets)
-        validation_mean_average_precision = self.validation_mean_average_precision(predictions, targets)
-        self.log('validation_map@0.50:0.95', validation_mean_average_precision['map'], on_epoch=True, prog_bar=True)
-        self.log('validation_map@0.50', validation_mean_average_precision['map_50'], on_epoch=True, prog_bar=True)
-        self.log('validation_map@0.75', validation_mean_average_precision['map_75'], on_epoch=True, prog_bar=True)
-        self.log('validation_mar@1', validation_mean_average_precision['mar_1'], on_epoch=True, prog_bar=True)
-        self.log('validation_mar@10', validation_mean_average_precision['mar_10'], on_epoch=True, prog_bar=True)
-        self.log('validation_mar@100', validation_mean_average_precision['mar_100'], on_epoch=True, prog_bar=True)
+        self.validation_mean_average_precision(predictions, targets)
 
-    def validation_epoch_end(self, outputs: EPOCH_OUTPUT) -> None:
+    def on_validation_epoch_end(self) -> None:
+        metrics = self.validation_mean_average_precision.compute()
+        self._log_metrics(metrics)
         self.validation_mean_average_precision.reset()
 
     def test_step(self, batch, batch_idx):
         images, targets = batch
         predictions = self(images, targets)
-        test_mean_average_precision = self.test_mean_average_precision(predictions, targets)
-        self.log('test_map@0.50:0.95', test_mean_average_precision['map'], on_epoch=True, prog_bar=True)
-        self.log('test_map@0.50', test_mean_average_precision['map_50'], on_epoch=True, prog_bar=True)
-        self.log('test_map@0.75', test_mean_average_precision['map_75'], on_epoch=True, prog_bar=True)
-        self.log('test_mar@1', test_mean_average_precision['mar_1'], on_epoch=True, prog_bar=True)
-        self.log('test_mar@10', test_mean_average_precision['mar_10'], on_epoch=True, prog_bar=True)
-        self.log('test_mar@100', test_mean_average_precision['mar_100'], on_epoch=True, prog_bar=True)
+        self.test_mean_average_precision(predictions, targets)
 
-    def test_epoch_end(self, outputs: EPOCH_OUTPUT) -> None:
+    def on_test_epoch_end(self) -> None:
+        metrics = self.test_mean_average_precision.compute()
+        self._log_metrics(metrics)
         self.test_mean_average_precision.reset()
 
+    def _log_metrics(self, mean_average_precision):
+        for index, value in enumerate(mean_average_precision['map_per_class']):
+            mean_average_precision[f'map_per_class_{index}'] = value
+        for index, value in enumerate(mean_average_precision['mar_100_per_class']):
+            mean_average_precision[f'mar_100_per_class_{index}'] = value
+        del mean_average_precision['map_per_class']
+        del mean_average_precision['mar_100_per_class']
+        for name, metric in mean_average_precision.items():
+            self.log(name, metric, on_epoch=True, prog_bar=True)
+
     def configure_optimizers(self):
-        optimizer = Adam(self.parameters(), lr=0.0001)
-        return optimizer
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': ReduceLROnPlateau(optimizer, factor=0.5, patience=4),
+                'monitor': 'map_50',
+                'interval': 'epoch',
+                'frequency': 1
+            }
+        }
 
     def train_dataloader(self) -> TRAIN_DATALOADERS:
         train_dataset = Augsburg15DetectionDataset(
             root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
             image_info_csv='pollen15_train_annotations_preprocessed.csv',
             transforms=Compose([
-                ToTensor(), RandomHorizontalFlip(0.5), RandomVerticalFlip(0.5), RandomRotation(0.5, 25, self.image_size)
+                ToTensor(),
+                RandomHorizontalFlip(0.5),
+                RandomVerticalFlip(0.5),
+                RandomRotation(0.5, 25, (1280, 960))
             ])
         )
         return DataLoader(

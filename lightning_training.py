@@ -4,8 +4,8 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset
-from src.models.faster_rcnn import PretrainedEfficientNetV2
 from src.models.soft_teacher import SoftTeacher
+from src.models.timm_adapter import Network
 
 
 def get_git_revision_short_hash() -> str:
@@ -19,7 +19,11 @@ if __name__ == '__main__':
         teacher_pseudo_threshold=0.9,
         student_inference_threshold=0.5,
         unsupervised_loss_weight=1.0,
-        image_size=Augsburg15DetectionDataset.IMAGE_SIZE
+        image_size=Augsburg15DetectionDataset.IMAGE_SIZE,
+        backbone=Network.RESNET_50,
+        min_image_size=800,
+        max_image_size=1066,
+        freeze_backbone=False,
     )
 
     logger = TensorBoardLogger('logs', f'soft_teacher#{get_git_revision_short_hash()}')
