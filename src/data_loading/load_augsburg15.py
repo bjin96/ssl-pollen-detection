@@ -44,27 +44,26 @@ class Augsburg15DetectionDataset(Dataset):
         'Ulmus',
         'Urticaceae'
     ]
-    _CLASS_WEIGHTS = [
+    CLASS_WEIGHTS = [
         # background class at index 0
-        0.,
-        1 / 6028,
-        1 / 1465,
-        1 / 4806,
-        1 / 7016,
-        1 / 457,
-        1 / 282,
-        1 / 1016,
-        1 / 2121,
-        1 / 1208,
-        1 / 349,
-        1 / 309,
-        1 / 3691,
-        1 / 109,
-        1 / 216,
-        1 / 1712,
+        1.,
+        7016 / 6028,
+        7016 / 1465,
+        7016 / 4806,
+        7016 / 7016,
+        7016 / 457,
+        7016 / 282,
+        7016 / 1016,
+        7016 / 2121,
+        7016 / 1208,
+        7016 / 349,
+        7016 / 309,
+        7016 / 3691,
+        7016 / 109,
+        7016 / 216,
+        7016 / 1712,
     ]
     NUM_CLASSES = 16
-    IMAGE_SIZE = (1280, 960)
 
     def __init__(self, root_directory, image_info_csv, transforms=None):
         self.transforms = transforms
@@ -98,7 +97,7 @@ class Augsburg15DetectionDataset(Dataset):
     def get_mean_sample_weights(self):
         sample_weights = []
         for class_indices in self.image_info['labels']:
-            mean_weight = np.mean([self._CLASS_WEIGHTS[class_index] for class_index in class_indices])
+            mean_weight = np.mean([self.CLASS_WEIGHTS[class_index] for class_index in class_indices])
             sample_weights.append(mean_weight)
         return sample_weights
 

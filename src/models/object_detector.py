@@ -1,11 +1,27 @@
+from enum import Enum
+
 import timm
 from pytorch_lightning import LightningModule
-from torchmetrics.detection.map import MeanAveragePrecision
 from torchvision.ops import MultiScaleRoIAlign
+from torch.nn.functional import cross_entropy
 
+from src.loss.focal_loss import calculate_focal_loss
 from src.model_definition.anchor_utils import AnchorGenerator
 from src.model_definition.faster_rcnn import FasterRCNN
 from src.models.timm_adapter import Network, TimmBackboneWithFPN
+from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation
+
+
+class ClassificationLoss(Enum):
+    CROSS_ENTROPY = cross_entropy
+    FOCAL = calculate_focal_loss
+
+
+class Augmentation(Enum):
+    VERTICAL_FLIP = 'vertical_flip'
+    HORIZONTAL_FLIP = 'horizontal_flip'
+    ROTATION = 'rotation'
+    ROTATION_CUTOFF = 'rotation_cutoff'
 
 
 class ObjectDetector(LightningModule):
@@ -36,19 +52,17 @@ class ObjectDetector(LightningModule):
         self.timm_model = timm_model
         self.freeze_backbone = freeze_backbone
         self.model = self.define_model(min_image_size, max_image_size)
-        self.validation_mean_average_precision = MeanAveragePrecision(class_metrics=True)
-        self.test_mean_average_precision = MeanAveragePrecision(class_metrics=True)
-        self.batch_size = batch_size
 
     def define_model(self, min_image_size, max_image_size):
         feature_extractor = timm.create_model(
             self.timm_model.value,
             pretrained=True,
             features_only=True,
+            out_indices=(1, 2, 3, 4)
         )
         out_indices = feature_extractor.feature_info.out_indices
         out_channels = 256
-        in_channels = [i['num_chs'] for i in feature_extractor.feature_info.info]
+        in_channels = [i['num_chs'] for i in feature_extractor.feature_info.info[1:]]
 
         if self.freeze_backbone:
             # Freeze similarly to pytorch model.
@@ -83,6 +97,8 @@ class ObjectDetector(LightningModule):
             box_roi_pool=roi_pooler,
             min_size=min_image_size,
             max_size=max_image_size,
+            # classification_loss_function=classification_loss_function,
+            # class_weights=class_weights
         )
 
     def forward(self, images, targets=None, teacher_box_predictor=None, unsupervised_loss_weight=1.0):

@@ -1,12 +1,12 @@
 import os
 from copy import deepcopy
-from typing import Tuple
+from typing import Tuple, List
 
 import pytorch_lightning as pl
 import torch
 import torchvision.transforms
-from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT, EPOCH_OUTPUT
-from torch.optim import Optimizer, Adam
+from pytorch_lightning.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT
+from torch.optim import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torchmetrics.detection.map import MeanAveragePrecision
@@ -14,7 +14,7 @@ from torchmetrics.detection.map import MeanAveragePrecision
 from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
 from src.image_tools.overlap import clean_pseudo_labels
 from src.models.exponential_moving_average import ExponentialMovingAverage
-from src.models.object_detector import ObjectDetector
+from src.models.object_detector import ObjectDetector, Augmentation
 from src.models.timm_adapter import Network
 from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation
 
@@ -28,13 +28,14 @@ class SoftTeacher(pl.LightningModule):
             self,
             num_classes: int,
             batch_size: int,
+            learning_rate: float,
             teacher_pseudo_threshold: float,
             student_inference_threshold: float,
             unsupervised_loss_weight: float,
-            image_size: Tuple[int],
             backbone: Network,
             min_image_size: int,
             max_image_size: int,
+            augmentations: List[Augmentation],
             freeze_backbone: bool = False,
     ):
         super(SoftTeacher, self).__init__()
@@ -43,7 +44,8 @@ class SoftTeacher(pl.LightningModule):
         self.num_classes = num_classes
         self.batch_size = batch_size
         self.unsupervised_loss_weight = unsupervised_loss_weight
-        self.image_size = image_size
+        self.learning_rate = learning_rate
+        self.augmentations = augmentations
 
         self.student = ObjectDetector(
             num_classes=num_classes,
@@ -64,8 +66,8 @@ class SoftTeacher(pl.LightningModule):
         # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
         self.exponential_moving_average = ExponentialMovingAverage(self.student, self.teacher, decay=0.99)
 
-        self.validation_mean_average_precision = MeanAveragePrecision(class_metrics=True)
-        self.test_mean_average_precision = MeanAveragePrecision(class_metrics=True)
+        self.validation_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
+        self.test_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
 
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
         self.exponential_moving_average.update_teacher()
@@ -116,7 +118,7 @@ class SoftTeacher(pl.LightningModule):
 
     def on_validation_epoch_end(self) -> None:
         metrics = self.validation_mean_average_precision.compute()
-        self._log_metrics(metrics)
+        self._log_metrics(metrics, mode='validation')
         self.validation_mean_average_precision.reset()
 
     def test_step(self, batch, batch_idx):
@@ -126,10 +128,10 @@ class SoftTeacher(pl.LightningModule):
 
     def on_test_epoch_end(self) -> None:
         metrics = self.test_mean_average_precision.compute()
-        self._log_metrics(metrics)
+        self._log_metrics(metrics, mode='test')
         self.test_mean_average_precision.reset()
 
-    def _log_metrics(self, mean_average_precision):
+    def _log_metrics(self, mean_average_precision, mode):
         for index, value in enumerate(mean_average_precision['map_per_class']):
             mean_average_precision[f'map_per_class_{index}'] = value
         for index, value in enumerate(mean_average_precision['mar_100_per_class']):
@@ -137,30 +139,43 @@ class SoftTeacher(pl.LightningModule):
         del mean_average_precision['map_per_class']
         del mean_average_precision['mar_100_per_class']
         for name, metric in mean_average_precision.items():
-            self.log(name, metric, on_epoch=True, prog_bar=True)
+            self.log(f'{mode}_{name}', metric, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.0001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return {
             'optimizer': optimizer,
             'lr_scheduler': {
                 'scheduler': ReduceLROnPlateau(optimizer, factor=0.5, patience=4),
-                'monitor': 'map_50',
+                'monitor': 'validation_map_50',
                 'interval': 'epoch',
                 'frequency': 1
             }
         }
 
+    def optimizer_zero_grad(self, epoch: int, batch_idx: int, optimizer: Optimizer, optimizer_idx: int):
+        optimizer.zero_grad(set_to_none=True)
+
     def train_dataloader(self) -> TRAIN_DATALOADERS:
+        transforms_list = [ToTensor()]
+
+        if Augmentation.HORIZONTAL_FLIP in self.augmentations:
+            transforms_list.append(RandomHorizontalFlip(0.5))
+        if Augmentation.VERTICAL_FLIP in self.augmentations:
+            transforms_list.append(RandomVerticalFlip(0.5))
+
+        if Augmentation.ROTATION in self.augmentations and Augmentation.ROTATION_CUTOFF in self.augmentations:
+            raise ValueError("Cannot apply rotation and rotation cutoff data augmentation at the same time.")
+
+        if Augmentation.ROTATION in self.augmentations:
+            transforms_list.append(RandomRotation(0.5, 25, (1280, 960))),
+        elif Augmentation.ROTATION_CUTOFF in self.augmentations:
+            transforms_list.append(RandomRotation(0.5, 25, (1280, 960), True))
+
         train_dataset = Augsburg15DetectionDataset(
             root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
             image_info_csv='pollen15_train_annotations_preprocessed.csv',
-            transforms=Compose([
-                ToTensor(),
-                RandomHorizontalFlip(0.5),
-                RandomVerticalFlip(0.5),
-                RandomRotation(0.5, 25, (1280, 960))
-            ])
+            transforms=Compose(transforms_list)
         )
         return DataLoader(
             train_dataset,
@@ -168,7 +183,7 @@ class SoftTeacher(pl.LightningModule):
             collate_fn=collate_augsburg15_detection,
             drop_last=True,
             shuffle=True,
-            num_workers=4,
+            num_workers=2
         )
 
     def val_dataloader(self) -> EVAL_DATALOADERS:
@@ -182,7 +197,7 @@ class SoftTeacher(pl.LightningModule):
             batch_size=self.batch_size,
             collate_fn=collate_augsburg15_detection,
             drop_last=True,
-            num_workers=4
+            num_workers=2
         )
 
     def test_dataloader(self) -> EVAL_DATALOADERS:
@@ -196,7 +211,7 @@ class SoftTeacher(pl.LightningModule):
             batch_size=self.batch_size,
             collate_fn=collate_augsburg15_detection,
             drop_last=True,
-            num_workers=4
+            num_workers=2
         )
 
     def predict_dataloader(self) -> EVAL_DATALOADERS:
