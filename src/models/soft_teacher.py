@@ -69,6 +69,15 @@ class SoftTeacher(pl.LightningModule):
         self.validation_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
         self.test_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
 
+        self.student_augmenter = torchvision.transforms.Compose([
+            torchvision.transforms.RandomSolarize(threshold=float(torch.rand(1).numpy()), p=0.25),
+            torchvision.transforms.RandomApply(
+                [torchvision.transforms.ColorJitter(brightness=(0., 1.), contrast=(0., 1.))],
+                p=0.25
+            ),
+            torchvision.transforms.RandomAdjustSharpness(sharpness_factor=float(torch.rand(1)), p=0.25),
+        ])
+
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
         self.exponential_moving_average.update_teacher()
 
@@ -77,7 +86,8 @@ class SoftTeacher(pl.LightningModule):
         y_labelled = self.student(x, y, teacher_box_predictor, self.unsupervised_loss_weight)
 
         # Box jittering: use box regression head of teacher (multiple times with different starting points) and look if
-        # it comes to the same result (-> reliable regression, higher weight).
+        # it comes to the same result (-> reliable regression, higher weight). Won't use here, because location
+        # accuracy is not as important
         return y_labelled
 
     def train(self: 'SoftTeacher', mode: bool = True) -> 'SoftTeacher':
@@ -88,24 +98,16 @@ class SoftTeacher(pl.LightningModule):
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
         images, targets = batch
 
-        # TODO Depends on consistency regularization: ideally, there should be a weakly augmented batch (for the
-        # TODO teacher) and a strongly augmented batch (for the student) https://arxiv.org/pdf/2001.07685.pdf.
-        # Augment teacher images:
-        teacher_augmenter = torchvision.transforms.Compose([
-            torchvision.transforms.RandomSolarize(threshold=float(torch.rand(1).numpy()), p=0.25),
-            torchvision.transforms.RandomApply(
-                [torchvision.transforms.ColorJitter(brightness=(0., 1.), contrast=(0., 1.))],
-                p=0.25
-            ),
-            torchvision.transforms.RandomAdjustSharpness(sharpness_factor=float(torch.rand(1)), p=0.25),
-        ])
-        teacher_images = teacher_augmenter(images)
+        # Consistency regularization: Use a weakly augmented batch for the teacher and a strongly augmented batch for
+        # the student https://arxiv.org/pdf/2001.07685.pdf.
+
+        student_images = self.student_augmenter(images)
 
         # Originally, this would be two different batches, labelled + unlabelled.
-        raw_x_pseudo = self.teacher(teacher_images)
+        raw_x_pseudo = self.teacher(images)
         cleaned_y_pseudo = clean_pseudo_labels(raw_x_pseudo, targets)
 
-        loss_dict = self(images, cleaned_y_pseudo, self.teacher.model.roi_heads.box_predictor)
+        loss_dict = self(student_images, cleaned_y_pseudo, self.teacher.model.roi_heads.box_predictor)
 
         total_loss = sum(loss for loss in loss_dict.values())
         self.log('train_loss', total_loss, on_step=True, batch_size=self.batch_size)
