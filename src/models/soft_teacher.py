@@ -83,7 +83,7 @@ class SoftTeacher(pl.LightningModule):
 
     def forward(self, x, y=None, teacher_box_predictor=None):
 
-        y_labelled = self.student(x, y, teacher_box_predictor, self.unsupervised_loss_weight)
+        y_labelled = self.student(x, y, teacher_box_predictor)
 
         # Box jittering: use box regression head of teacher (multiple times with different starting points) and look if
         # it comes to the same result (-> reliable regression, higher weight). Won't use here, because location
@@ -110,7 +110,7 @@ class SoftTeacher(pl.LightningModule):
         loss_dict = self(student_images, cleaned_y_pseudo, self.teacher.model.roi_heads.box_predictor)
 
         total_loss = sum(loss for loss in loss_dict.values())
-        self.log('train_loss', total_loss, on_step=True, batch_size=self.batch_size)
+        self.log_dict(loss_dict, on_step=True, batch_size=self.batch_size)
         return total_loss
 
     def validation_step(self, batch, batch_idx) -> None:

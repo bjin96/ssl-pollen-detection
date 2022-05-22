@@ -16,9 +16,8 @@ from typing import Optional, List, Dict, Tuple
 from src.loss.soft_teacher import soft_teacher_classification_loss
 
 
-def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo,
-                  unsupervised_loss_weight):
-    # type: (Tensor, Tensor, List[Tensor], List[Tensor], Tensor, List[Tensor], float) -> Tuple[Tensor, Tensor]
+def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo):
+    # type: (Tensor, Tensor, List[Tensor], List[Tensor], Tensor, List[Tensor]) -> Tuple[Tensor, Tensor, Tensor]
     """class_logits * one_hot_labels
     Computes the loss for Faster R-CNN.
 
@@ -29,10 +28,10 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teac
         regression_targets (Tensor)
         teacher_background_scores (Tensor)
         is_pseudo (Tensor)
-        unsupervised_loss_weight (float)
 
     Returns:
-        classification_loss (Tensor)
+        supervised_classification_loss (Tensor)
+        unsupervised_classification_loss (Tensor)
         box_loss (Tensor)
     """
 
@@ -40,31 +39,12 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teac
     regression_targets = torch.cat(regression_targets, dim=0)
     is_pseudo = torch.cat(is_pseudo, dim=0)
 
-    # Focal loss start
-    # alpha = 0.25
-    # gamma = 2.
-    #
-    # epsilon = 10e-5
-    #
-    # one_hot_labels = nn.functional.one_hot(labels, num_classes=16)
-    # class_probabilities = nn.functional.softmax(class_logits, dim=-1)
-    # p_t = torch.sum(class_probabilities * one_hot_labels, dim=-1) + epsilon
-    # focal_loss = -torch.log(p_t) * ((1 - p_t) ** gamma)
-    #
-    # if alpha >= 0:
-    #     # alpha_t = alpha * one_hot_labels + (1 - alpha) * (1 - one_hot_labels)
-    #     focal_loss = alpha * focal_loss
-    #
-    # focal_loss = focal_loss.mean()
-    # Focal loss end
-
     # SoftTeacher weighting:
-    classification_loss = soft_teacher_classification_loss(
+    supervised_loss, unsupervised_loss = soft_teacher_classification_loss(
         class_logits=class_logits,
         labels=labels,
         teacher_background_scores=teacher_background_scores,
         is_pseudo=is_pseudo,
-        unsupervised_loss_weight=unsupervised_loss_weight
     )
 
     # get indices that correspond to the regression targets for
@@ -83,8 +63,7 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teac
     )
     box_loss = box_loss / labels.numel()
 
-    return classification_loss, box_loss
-    # return focal_loss, box_loss
+    return supervised_loss, unsupervised_loss, box_loss
 
 
 def maskrcnn_inference(x, labels):
@@ -808,11 +787,11 @@ class RoIHeads(nn.Module):
             # SoftTeacher: Use teacher head to weight loss
             teacher_class_logits, teacher_box_regression = teacher_box_predictor(box_features)
             teacher_background_scores = F.softmax(teacher_class_logits, -1)[:, 0]
-            loss_classifier, loss_box_reg = fastrcnn_loss(
-                class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo,
-                unsupervised_loss_weight)
+            supervised_loss_classifier, unsupervised_loss_classifier, loss_box_reg = fastrcnn_loss(
+                class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo)
             losses = {
-                "loss_classifier": loss_classifier,
+                "supervised_loss_classifier": supervised_loss_classifier,
+                "unsupervised_loss_classifier": unsupervised_loss_classifier,
                 "loss_box_reg": loss_box_reg
             }
         else:

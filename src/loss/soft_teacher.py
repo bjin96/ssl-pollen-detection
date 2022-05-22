@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import torch
 from torch.nn.functional import softmax, cross_entropy
 
@@ -7,8 +9,7 @@ def soft_teacher_classification_loss(
         labels: torch.Tensor,
         teacher_background_scores: torch.Tensor,
         is_pseudo: torch.Tensor,
-        unsupervised_loss_weight: float = 1.0,
-) -> torch.Tensor:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     epsilon = 10e-5
     class_probabilities = softmax(class_logits, -1)
     indices = torch.argmax(class_probabilities, -1)
@@ -44,5 +45,5 @@ def soft_teacher_classification_loss(
     # TODO: Maybe divide by 4 to not destroy equilibrium between classification and regression loss (own addition)
     supervised_loss = supervised_foreground_loss + supervised_background_loss
     unsupervised_loss = unsupervised_foreground_loss + unsupervised_background_loss
-    # TODO: Maybe additional hyperparameter to weight unsupervised loss?
-    return supervised_loss + unsupervised_loss_weight * unsupervised_loss
+
+    return supervised_loss, unsupervised_loss

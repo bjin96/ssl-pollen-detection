@@ -9,7 +9,6 @@ from src.loss.focal_loss import calculate_focal_loss
 from src.model_definition.anchor_utils import AnchorGenerator
 from src.model_definition.faster_rcnn import FasterRCNN
 from src.models.timm_adapter import Network, TimmBackboneWithFPN
-from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation
 
 
 class ClassificationLoss(Enum):
@@ -101,6 +100,6 @@ class ObjectDetector(LightningModule):
             # class_weights=class_weights
         )
 
-    def forward(self, images, targets=None, teacher_box_predictor=None, unsupervised_loss_weight=1.0):
-        return self.model(images, targets, teacher_box_predictor, unsupervised_loss_weight)
+    def forward(self, images, targets=None, teacher_box_predictor=None):
+        return self.model(images, targets, teacher_box_predictor)
 
