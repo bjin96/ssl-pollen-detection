@@ -124,6 +124,7 @@ def start_experiment(
         min_image_size=800,
         max_image_size=1066,
         freeze_backbone=False,
+        classification_loss_function=classification_loss_function
     )
 
     log_directory = 'logs'

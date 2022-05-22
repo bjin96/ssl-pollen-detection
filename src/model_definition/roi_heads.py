@@ -1,4 +1,4 @@
-"""Copied from https://github.com/pytorch/vision/tree/main/torchvision/models/detection"""
+"""Adapted from https://github.com/pytorch/vision/tree/main/torchvision/models/detection"""
 import torch
 import torchvision
 
@@ -11,13 +11,14 @@ from torchvision.ops import roi_align
 
 import src.model_definition._utils as det_utils
 
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Callable
 
 from src.loss.soft_teacher import soft_teacher_classification_loss
 
 
-def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo):
-    # type: (Tensor, Tensor, List[Tensor], List[Tensor], Tensor, List[Tensor]) -> Tuple[Tensor, Tensor, Tensor]
+def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo,
+                  classification_loss_function):
+    # type: (Tensor, Tensor, List[Tensor], List[Tensor], Tensor, List[Tensor], Callable) -> Tuple[Tensor, Tensor, Tensor]
     """class_logits * one_hot_labels
     Computes the loss for Faster R-CNN.
 
@@ -28,6 +29,7 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teac
         regression_targets (Tensor)
         teacher_background_scores (Tensor)
         is_pseudo (Tensor)
+        classification_loss_function (Callable)
 
     Returns:
         supervised_classification_loss (Tensor)
@@ -45,6 +47,7 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, teac
         labels=labels,
         teacher_background_scores=teacher_background_scores,
         is_pseudo=is_pseudo,
+        classification_loss_function=classification_loss_function
     )
 
     # get indices that correspond to the regression targets for
@@ -514,6 +517,8 @@ class RoIHeads(nn.Module):
                  score_thresh,
                  nms_thresh,
                  detections_per_img,
+                 # loss
+                 classification_loss_function,
                  # Mask
                  mask_roi_pool=None,
                  mask_head=None,
@@ -523,6 +528,8 @@ class RoIHeads(nn.Module):
                  keypoint_predictor=None,
                  ):
         super(RoIHeads, self).__init__()
+
+        self.classification_loss_function = classification_loss_function
 
         self.box_similarity = box_ops.box_iou
         # assign ground-truth boxes for each proposal
@@ -788,7 +795,7 @@ class RoIHeads(nn.Module):
             teacher_class_logits, teacher_box_regression = teacher_box_predictor(box_features)
             teacher_background_scores = F.softmax(teacher_class_logits, -1)[:, 0]
             supervised_loss_classifier, unsupervised_loss_classifier, loss_box_reg = fastrcnn_loss(
-                class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo)
+                class_logits, box_regression, labels, regression_targets, teacher_background_scores, is_pseudo, self.classification_loss_function)
             losses = {
                 "supervised_loss_classifier": supervised_loss_classifier,
                 "unsupervised_loss_classifier": unsupervised_loss_classifier,

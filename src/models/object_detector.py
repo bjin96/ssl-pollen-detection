@@ -33,6 +33,7 @@ class ObjectDetector(LightningModule):
             min_image_size: int,
             max_image_size: int,
             freeze_backbone: bool = False,
+            classification_loss_function: ClassificationLoss = ClassificationLoss.CROSS_ENTROPY,
     ):
         """
         Creates a Faster R-CNN model with a pre-trained backbone from timm
@@ -45,14 +46,15 @@ class ObjectDetector(LightningModule):
             min_image_size: Minimum size to which the image is scaled.
             max_image_size: Maximum size to which the image is scaled.
             freeze_backbone: Whether to freeze the backbone for the training.
+            classification_loss_function: Loss function to apply for the classification loss part of the ROI heads.
         """
         super().__init__()
         self.num_classes = num_classes
         self.timm_model = timm_model
         self.freeze_backbone = freeze_backbone
-        self.model = self.define_model(min_image_size, max_image_size)
+        self.model = self.define_model(min_image_size, max_image_size, classification_loss_function)
 
-    def define_model(self, min_image_size, max_image_size):
+    def define_model(self, min_image_size, max_image_size, classification_loss_function):
         feature_extractor = timm.create_model(
             self.timm_model.value,
             pretrained=True,
@@ -96,7 +98,7 @@ class ObjectDetector(LightningModule):
             box_roi_pool=roi_pooler,
             min_size=min_image_size,
             max_size=max_image_size,
-            # classification_loss_function=classification_loss_function,
+            classification_loss_function=classification_loss_function,
             # class_weights=class_weights
         )
 

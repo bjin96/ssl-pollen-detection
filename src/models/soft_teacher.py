@@ -14,7 +14,7 @@ from torchmetrics.detection.map import MeanAveragePrecision
 from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
 from src.image_tools.overlap import clean_pseudo_labels
 from src.models.exponential_moving_average import ExponentialMovingAverage
-from src.models.object_detector import ObjectDetector, Augmentation
+from src.models.object_detector import ObjectDetector, Augmentation, ClassificationLoss
 from src.models.timm_adapter import Network
 from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation
 
@@ -37,6 +37,7 @@ class SoftTeacher(pl.LightningModule):
             max_image_size: int,
             augmentations: List[Augmentation],
             freeze_backbone: bool = False,
+            classification_loss_function: ClassificationLoss = ClassificationLoss.CROSS_ENTROPY,
     ):
         super(SoftTeacher, self).__init__()
         self.save_hyperparameters()
@@ -54,6 +55,7 @@ class SoftTeacher(pl.LightningModule):
             min_image_size=min_image_size,
             max_image_size=max_image_size,
             freeze_backbone=freeze_backbone,
+            classification_loss_function=classification_loss_function,
         )
         # Only use high confidence box predictions for inference.
         self.student.model.roi_heads.score_thresh = student_inference_threshold
