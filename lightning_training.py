@@ -8,7 +8,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset
-from src.models.object_detector import ObjectDetector, ClassificationLoss, Augmentation
+from src.models.object_detector import ClassificationLoss, Augmentation
 from src.models.timm_adapter import Network
 
 from src.models.soft_teacher import SoftTeacher
@@ -49,7 +49,7 @@ augmentations = {
 )
 @click.option(
     '--batch_size',
-    default=2,
+    default=4,
     help='Batch size for the training.'
 )
 @click.option(
@@ -114,7 +114,7 @@ def start_experiment(
 
     model = SoftTeacher(
         num_classes=Augsburg15DetectionDataset.NUM_CLASSES,
-        batch_size=batch_size,
+        batch_size=1,
         learning_rate=0.0001,
         teacher_pseudo_threshold=0.9,
         student_inference_threshold=0.05,
@@ -141,8 +141,9 @@ def start_experiment(
         logger=logger,
         callbacks=[checkpoint_callback],
         gpus=1 if torch.cuda.is_available() else 0,
-        precision=16,
+        precision=16 if torch.cuda.is_available() else 32,
         progress_bar_refresh_rate=1000,
+        accumulate_grad_batches=batch_size,
     )
     trainer.fit(
         model,
