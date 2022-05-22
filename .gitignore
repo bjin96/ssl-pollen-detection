@@ -3,3 +3,6 @@ datasets/
 plots/
 lightning_logs/
 logs/
+__pycache__/
+*.pyc
+.DS_Store
