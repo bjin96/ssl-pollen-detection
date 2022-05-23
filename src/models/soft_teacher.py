@@ -72,11 +72,11 @@ class SoftTeacher(pl.LightningModule):
         self.test_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
 
         self.student_augmenter = torchvision.transforms.Compose([
-            torchvision.transforms.RandomSolarize(threshold=float(torch.rand(1).numpy()), p=0.25),
-            torchvision.transforms.RandomApply(
-                [torchvision.transforms.ColorJitter(brightness=(0., 1.), contrast=(0., 1.))],
-                p=0.25
-            ),
+            # torchvision.transforms.RandomSolarize(threshold=float(torch.rand(1).numpy()), p=0.25),
+            # torchvision.transforms.RandomApply(
+            #     [torchvision.transforms.ColorJitter(brightness=(0., 1.), contrast=(0., 1.))],
+            #     p=0.25
+            # ),
             torchvision.transforms.RandomAdjustSharpness(sharpness_factor=float(torch.rand(1)), p=0.25),
         ])
 
