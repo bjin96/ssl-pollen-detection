@@ -28,7 +28,7 @@ def soft_teacher_classification_loss(
     else:
         supervised_background_loss = torch.tensor(0., device=device)
     if torch.numel(unweighted_loss[select_unsupervised_background]) > 0:
-        unsupervised_background_loss = torch.mean(reliability_weight * unweighted_loss[select_unsupervised_background])
+        unsupervised_background_loss = torch.sum(reliability_weight * unweighted_loss[select_unsupervised_background])
     else:
         unsupervised_background_loss = torch.tensor(0., device=device)
 
