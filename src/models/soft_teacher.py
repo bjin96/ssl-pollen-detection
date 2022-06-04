@@ -111,6 +111,7 @@ class SoftTeacher(pl.LightningModule):
 
         loss_dict = self(student_images, cleaned_y_pseudo, self.teacher.model.roi_heads.box_predictor)
 
+        loss_dict['unsupervised_loss_classifier'] *= self.unsupervised_loss_weight
         total_loss = sum(loss for loss in loss_dict.values())
         self.log_dict(loss_dict, on_step=True, batch_size=self.batch_size)
         return total_loss

@@ -88,6 +88,11 @@ augmentations = {
     multiple=True,
     help='Which data augmentations to use for the training.'
 )
+@click.option(
+    '--unsupervised_loss_weight',
+    default=1.0,
+    help='Factor for scaling the unsupervised loss.'
+)
 def start_experiment(
         experiment_name: str,
         checkpoint_path: str,
@@ -98,7 +103,8 @@ def start_experiment(
         freeze_backbone: bool,
         classification_loss_function: str,
         use_weights: bool,
-        data_augmentation: List[str]
+        data_augmentation: List[str],
+        unsupervised_loss_weight: float,
 ):
     print(
         f'Starting experiment {experiment_name} with: batch_size = {batch_size}, backbone = {backbone}, '
@@ -118,7 +124,7 @@ def start_experiment(
         learning_rate=0.0001,
         teacher_pseudo_threshold=0.9,
         student_inference_threshold=0.05,
-        unsupervised_loss_weight=1.0,
+        unsupervised_loss_weight=unsupervised_loss_weight,
         backbone=backbone,
         augmentations=data_augmentations,
         min_image_size=800,
