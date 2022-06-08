@@ -1,7 +1,6 @@
 from typing import Tuple, Callable
 
 import torch
-from torch.nn.functional import softmax
 
 
 def soft_teacher_classification_loss(
@@ -12,9 +11,7 @@ def soft_teacher_classification_loss(
         classification_loss_function: Callable,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     epsilon = 10e-5
-    class_probabilities = softmax(class_logits, -1)
-    indices = torch.argmax(class_probabilities, -1)
-    select_foreground = indices > 0
+    select_foreground = labels > 0
 
     unweighted_loss = classification_loss_function(class_logits, labels, reduction='none')
 
