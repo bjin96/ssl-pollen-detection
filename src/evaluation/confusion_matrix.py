@@ -55,7 +55,7 @@ def box_iou_calc(boxes1, boxes2):
 
 
 class ConfusionMatrix:
-    def __init__(self, num_classes: int, CONF_THRESHOLD=0.3, IOU_THRESHOLD=0.5):
+    def __init__(self, num_classes: int, CONF_THRESHOLD=0.5, IOU_THRESHOLD=0.5):
         self.matrix = np.zeros((num_classes + 1, num_classes + 1))
         self.num_classes = num_classes
         self.CONF_THRESHOLD = CONF_THRESHOLD
