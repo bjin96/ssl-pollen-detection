@@ -38,4 +38,7 @@ def clean_pseudo_labels(raw_x_pseudo, y, iou_threshold: float = 0.7):
 
 
 def batched_area_calculation(boxes):
+    if boxes.numel() == 0:
+        return torch.tensor([], dtype=boxes.dtype, device=boxes.device)
+
     return (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
