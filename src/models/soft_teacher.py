@@ -114,11 +114,13 @@ class SoftTeacher(pl.LightningModule):
         student_images = self.student_augmenter(images)
 
         if self.current_epoch < self.student_only_epochs:
-            raw_x_pseudo = [{
-                'boxes': torch.tensor([], dtype=targets[0]['boxes'].dtype, device=targets[0]['boxes'].device),
-                'labels': torch.tensor([], dtype=targets[0]['labels'].dtype, device=targets[0]['labels'].device),
-                'scores': torch.tensor([], dtype=targets[0]['boxes'].dtype, device=targets[0]['boxes'].device),
-            }]
+            raw_x_pseudo = [
+                {
+                    'boxes': torch.tensor([], dtype=targets[0]['boxes'].dtype, device=targets[0]['boxes'].device),
+                    'labels': torch.tensor([], dtype=targets[0]['labels'].dtype, device=targets[0]['labels'].device),
+                    'scores': torch.tensor([], dtype=targets[0]['boxes'].dtype, device=targets[0]['boxes'].device),
+                } for _ in range(self.batch_size)
+            ]
         else:
             # Originally, this would be two different batches, labelled + unlabelled.
             raw_x_pseudo = self.teacher(images, is_teacher=True)
