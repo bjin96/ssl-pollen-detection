@@ -66,7 +66,13 @@ class SoftTeacher(pl.LightningModule):
         self.teacher.model.roi_heads.score_thresh = teacher_pseudo_threshold
         self.teacher.eval()
         # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
-        self.exponential_moving_average = ExponentialMovingAverage(self.student, self.teacher, decay=0.99)
+        self.exponential_moving_average = ExponentialMovingAverage(
+            self.student,
+            self.teacher,
+            ramp_up_decay=0.99,
+            after_ramp_up_decay=0.999,
+            ramp_up_epochs=3,
+        )
 
         self.validation_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
         self.test_mean_average_precision = MeanAveragePrecision(class_metrics=True, compute_on_step=False)
@@ -81,7 +87,7 @@ class SoftTeacher(pl.LightningModule):
         ])
 
     def on_before_zero_grad(self, optimizer: Optimizer) -> None:
-        self.exponential_moving_average.update_teacher()
+        self.exponential_moving_average.update_teacher(self.current_epoch)
 
     def forward(self, x, y=None, teacher_box_predictor=None):
 
@@ -106,7 +112,7 @@ class SoftTeacher(pl.LightningModule):
         student_images = self.student_augmenter(images)
 
         # Originally, this would be two different batches, labelled + unlabelled.
-        raw_x_pseudo = self.teacher(images)
+        raw_x_pseudo = self.teacher(images, is_teacher=True)
         cleaned_y_pseudo = clean_pseudo_labels(raw_x_pseudo, targets)
 
         loss_dict = self(student_images, cleaned_y_pseudo, self.teacher.model.roi_heads.box_predictor)

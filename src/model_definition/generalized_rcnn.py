@@ -42,14 +42,14 @@ class GeneralizedRCNN(nn.Module):
 
         return detections
 
-    def forward(self, images, targets=None, teacher_box_predictor=None, unsupervised_loss_weight=1.0):
+    def forward(self, images, targets=None, teacher_box_predictor=None, is_teacher=False):
         # type: (List[Tensor], Optional[List[Dict[str, Tensor]]], Optional[nn.Module], float) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
         """
         Args:
             images (list[Tensor]): images to be processed
             targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
             teacher_box_predictor: Teacher box predictor for loss weighting
-            unsupervised_loss_weight: Weight between supervised and unsupervised loss.
+            is_teacher: Boolean indicating whether model is a teacher.
 
         Returns:
             result (list[BoxList] or dict[Tensor]): the output from the model.
@@ -99,7 +99,7 @@ class GeneralizedRCNN(nn.Module):
         if isinstance(features, torch.Tensor):
             features = OrderedDict([('0', features)])
         proposals, proposal_losses = self.rpn(images, features, targets)
-        detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets, teacher_box_predictor, unsupervised_loss_weight)
+        detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets, teacher_box_predictor, is_teacher)
         detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)
 
         losses = {}
