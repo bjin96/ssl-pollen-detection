@@ -93,6 +93,11 @@ augmentations = {
     default=1.0,
     help='Factor for scaling the unsupervised loss.'
 )
+@click.option(
+    '--student_only_epochs',
+    default=1,
+    help='Number of epochs with supervised training only.'
+)
 def start_experiment(
         experiment_name: str,
         checkpoint_path: str,
@@ -105,12 +110,12 @@ def start_experiment(
         use_weights: bool,
         data_augmentation: List[str],
         unsupervised_loss_weight: float,
+        student_only_epochs: int,
 ):
     print(
-        f'Starting experiment {experiment_name} with: batch_size = {batch_size}, backbone = {backbone}, '
-        f'min_image_size = {min_image_size}, max_image_size = {max_image_size}, freeze_backbone = {freeze_backbone}, '
-        f'classification_loss_function = {classification_loss_function}, class_weights = {use_weights}, '
-        f'data_augmentations = {data_augmentation}'
+        f'Starting experiment {experiment_name=} with: {batch_size=}, {backbone=}, {min_image_size=}, '
+        f'{max_image_size=}, {freeze_backbone=}, {classification_loss_function=}, {use_weights=}, '
+        f'{data_augmentation=}, {student_only_epochs=}'
     )
 
     backbone = NETWORKS[backbone]
@@ -130,7 +135,8 @@ def start_experiment(
         min_image_size=800,
         max_image_size=1066,
         freeze_backbone=False,
-        classification_loss_function=classification_loss_function
+        classification_loss_function=classification_loss_function,
+        student_only_epochs=student_only_epochs,
     )
 
     log_directory = 'logs'

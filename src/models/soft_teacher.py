@@ -38,6 +38,7 @@ class SoftTeacher(pl.LightningModule):
             augmentations: List[Augmentation],
             freeze_backbone: bool = False,
             classification_loss_function: ClassificationLoss = ClassificationLoss.CROSS_ENTROPY,
+            student_only_epochs: int = 1,
     ):
         super(SoftTeacher, self).__init__()
         self.save_hyperparameters()
@@ -47,6 +48,7 @@ class SoftTeacher(pl.LightningModule):
         self.unsupervised_loss_weight = unsupervised_loss_weight
         self.learning_rate = learning_rate
         self.augmentations = augmentations
+        self.student_only_epochs = student_only_epochs
 
         self.student = ObjectDetector(
             num_classes=num_classes,
@@ -111,10 +113,17 @@ class SoftTeacher(pl.LightningModule):
 
         student_images = self.student_augmenter(images)
 
-        # Originally, this would be two different batches, labelled + unlabelled.
-        raw_x_pseudo = self.teacher(images, is_teacher=True)
-        cleaned_y_pseudo = clean_pseudo_labels(raw_x_pseudo, targets)
+        if self.current_epoch < self.student_only_epochs:
+            raw_x_pseudo = [{
+                'boxes': torch.tensor([], dtype=targets[0]['boxes'].dtype, device=targets[0]['boxes'].device),
+                'labels': torch.tensor([], dtype=targets[0]['labels'].dtype, device=targets[0]['labels'].device),
+                'scores': torch.tensor([], dtype=targets[0]['boxes'].dtype, device=targets[0]['boxes'].device),
+            }]
+        else:
+            # Originally, this would be two different batches, labelled + unlabelled.
+            raw_x_pseudo = self.teacher(images, is_teacher=True)
 
+        cleaned_y_pseudo = clean_pseudo_labels(raw_x_pseudo, targets)
         loss_dict = self(student_images, cleaned_y_pseudo, self.teacher.model.roi_heads.box_predictor)
 
         loss_dict['unsupervised_loss_classifier'] *= self.unsupervised_loss_weight
