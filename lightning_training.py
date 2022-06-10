@@ -95,7 +95,7 @@ augmentations = {
 )
 @click.option(
     '--student_only_epochs',
-    default=1,
+    default=0,
     help='Number of epochs with supervised training only.'
 )
 def start_experiment(
@@ -127,7 +127,8 @@ def start_experiment(
         num_classes=Augsburg15DetectionDataset.NUM_CLASSES,
         batch_size=1,
         learning_rate=0.0001,
-        teacher_pseudo_threshold=0.9,
+        teacher_pseudo_roi_threshold=0.9,
+        teacher_pseudo_rpn_threshold=0.9,
         student_inference_threshold=0.05,
         unsupervised_loss_weight=unsupervised_loss_weight,
         backbone=backbone,

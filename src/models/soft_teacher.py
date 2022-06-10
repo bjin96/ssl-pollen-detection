@@ -1,6 +1,6 @@
 import os
 from copy import deepcopy
-from typing import Tuple, List
+from typing import List
 
 import pytorch_lightning as pl
 import torch
@@ -29,7 +29,8 @@ class SoftTeacher(pl.LightningModule):
             num_classes: int,
             batch_size: int,
             learning_rate: float,
-            teacher_pseudo_threshold: float,
+            teacher_pseudo_roi_threshold: float,
+            teacher_pseudo_rpn_threshold: float,
             student_inference_threshold: float,
             unsupervised_loss_weight: float,
             backbone: Network,
@@ -65,7 +66,8 @@ class SoftTeacher(pl.LightningModule):
         self.teacher = deepcopy(self.student)
         self.teacher.freeze()
         # Only use high confidence additional pseudo boxes.
-        self.teacher.model.roi_heads.score_thresh = teacher_pseudo_threshold
+        self.teacher.model.roi_heads.score_thresh = teacher_pseudo_roi_threshold
+        self.teacher.model.rpn.score_thresh = teacher_pseudo_rpn_threshold
         self.teacher.eval()
         # TODO decay should change because student learning slows down https://arxiv.org/pdf/1703.01780.pdf.
         self.exponential_moving_average = ExponentialMovingAverage(
