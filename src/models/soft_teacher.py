@@ -16,7 +16,8 @@ from src.image_tools.overlap import clean_pseudo_labels
 from src.models.exponential_moving_average import ExponentialMovingAverage
 from src.models.object_detector import ObjectDetector, Augmentation, ClassificationLoss
 from src.models.timm_adapter import Network
-from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation
+from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation, \
+    RandomCrop
 
 
 class SoftTeacher(pl.LightningModule):
@@ -187,6 +188,8 @@ class SoftTeacher(pl.LightningModule):
             transforms_list.append(RandomHorizontalFlip(0.5))
         if Augmentation.VERTICAL_FLIP in self.augmentations:
             transforms_list.append(RandomVerticalFlip(0.5))
+        if Augmentation.CROP in self.augmentations:
+            transforms_list.append(RandomCrop(0.5))
 
         if Augmentation.ROTATION in self.augmentations and Augmentation.ROTATION_CUTOFF in self.augmentations:
             raise ValueError("Cannot apply rotation and rotation cutoff data augmentation at the same time.")

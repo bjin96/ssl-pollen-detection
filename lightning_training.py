@@ -32,7 +32,8 @@ augmentations = {
     'vertical_flip': Augmentation.VERTICAL_FLIP,
     'horizontal_flip': Augmentation.HORIZONTAL_FLIP,
     'rotation': Augmentation.ROTATION,
-    'rotation_cutoff': Augmentation.ROTATION_CUTOFF
+    'rotation_cutoff': Augmentation.ROTATION_CUTOFF,
+    'crop': Augmentation.CROP,
 }
 
 

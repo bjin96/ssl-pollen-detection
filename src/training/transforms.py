@@ -1,5 +1,6 @@
 """Copied from https://github.com/pytorch/vision/tree/main/references/detection"""
 import random
+from typing import Tuple
 
 import torch
 from torch import Tensor
@@ -61,11 +62,12 @@ class RandomVerticalFlip(object):
 
 
 class RandomRotation(object):
-    def __init__(self, prob, degree_range, image_size, remove_cut_off_images=False):
+    def __init__(self, prob, degree_range, image_size, remove_cut_off_images=False, min_area=100):
         self.prob = prob
         self.degree_range = degree_range
         self.image_size = image_size
         self.remove_cut_off_images = remove_cut_off_images
+        self.min_area = min_area
 
     def __call__(self, image, target):
         if random.random() < self.prob:
@@ -137,12 +139,102 @@ class RandomRotation(object):
             )
             inside_mask = torch.logical_and(horizontal_inside_mask, vertical_inside_mask)
         else:
-            # Boxes were rotated outside the image if x1 and x2 or y1 and y2 are equal, respectively.
-            horizontal_inside_mask = torch.not_equal(box_coordinates[:, 0], box_coordinates[:, 2])
-            vertical_inside_mask = torch.not_equal(box_coordinates[:, 1], box_coordinates[:, 3])
-            inside_mask = torch.logical_and(horizontal_inside_mask, vertical_inside_mask)
+            inside_mask = torch.greater_equal(_calculate_batched_box_area(box_coordinates), self.min_area)
 
         return box_coordinates, inside_mask
+
+
+class RandomCrop(object):
+    def __init__(
+            self,
+            prob: float,
+            min_scale: float = 0.7,
+            max_scale: float = 0.9,
+            image_size: Tuple = (1280, 960),
+            min_area: int = 100,
+    ):
+        self.prob = prob
+        self.min_scale = min_scale
+        self.max_scale = max_scale
+        self.image_size = image_size
+        self.min_area = min_area
+
+    def __call__(self, image, target):
+        if random.random() < self.prob:
+            scale = (float(torch.rand(1)) * (self.max_scale - self.min_scale)) + self.min_scale
+
+            new_width = int(round(scale * self.image_size[0]))
+            new_height = int(round(scale * self.image_size[1]))
+
+            x_crop_origin = (self.image_size[0] - new_width) // 2
+            y_crop_origin = (self.image_size[1] - new_height) // 2
+
+            image = F.resized_crop(
+                img=image,
+                top=y_crop_origin,
+                left=x_crop_origin,
+                height=new_height,
+                width=new_width,
+                size=list(reversed(self.image_size))
+            )
+            target['boxes'], inside_mask = self._calculate_cropped_coordinates(
+                box_coordinates=target['boxes'],
+                x_crop_origin=x_crop_origin,
+                y_crop_origin=y_crop_origin,
+                new_width=new_width,
+                new_height=new_height,
+            )
+            target['boxes'] = target['boxes'][inside_mask]
+            target['labels'] = target['labels'][inside_mask]
+            target['area'] = target['area'][inside_mask]
+            target['iscrowd'] = target['iscrowd'][inside_mask]
+
+        return image, target
+
+    def _calculate_cropped_coordinates(
+            self,
+            box_coordinates: Tensor,
+            x_crop_origin: int,
+            y_crop_origin: int,
+            new_width: int,
+            new_height: int,
+    ):
+        """
+        Calculates new bounding box coordinates after a center crop. Marks a box if it leaves the image boundaries.
+
+        Args:
+            box_coordinates: Coordinates of the form [[x1, y1, x2, y3], ...] where (x1, y1) denotes the upper left
+                corner and (x2, y2) denotes the lower right corner of the bounding box.
+            x_crop_origin: New origin after cropping.
+            y_crop_origin: New origin after cropping.
+            new_width: New width after cropping.
+            new_height: New height after cropping.
+
+        Returns:
+            box_coordinates: New coordinates for the bounding box after cropping.
+            inside_mask: Boolean mask to indicate whether the box is inside the image boundaries.
+        """
+
+        # Transform coordinates to cropped part of the image.
+        box_coordinates[:, [0, 2]] -= x_crop_origin
+        box_coordinates[:, [1, 3]] -= y_crop_origin
+
+        # Scale coordinates to original image size.
+        box_coordinates[:, [0, 2]] *= self.image_size[0] / new_width
+        box_coordinates[:, [1, 3]] *= self.image_size[1] / new_height
+
+        box_coordinates[:, [0, 2]] = torch.maximum(box_coordinates[:, [0, 2]], torch.tensor(0))
+        box_coordinates[:, [0, 2]] = torch.minimum(box_coordinates[:, [0, 2]], torch.tensor(self.image_size[0]))
+        box_coordinates[:, [1, 3]] = torch.maximum(box_coordinates[:, [1, 3]], torch.tensor(0))
+        box_coordinates[:, [1, 3]] = torch.minimum(box_coordinates[:, [1, 3]], torch.tensor(self.image_size[1]))
+
+        inside_mask = torch.greater_equal(_calculate_batched_box_area(box_coordinates), self.min_area)
+
+        return box_coordinates, inside_mask
+
+
+def _calculate_batched_box_area(box):
+    return (box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1])
 
 
 class ToTensor(object):

@@ -21,6 +21,7 @@ class Augmentation(Enum):
     HORIZONTAL_FLIP = 'horizontal_flip'
     ROTATION = 'rotation'
     ROTATION_CUTOFF = 'rotation_cutoff'
+    CROP = 'crop'
 
 
 class ObjectDetector(LightningModule):
