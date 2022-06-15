@@ -120,13 +120,13 @@ class RandomRotation(object):
 
         # TODO: Maybe do something about bigger bounding boxes...
         box_coordinates[:, 0] = torch.maximum(torch.min(x_rotated, dim=-1)[0], torch.tensor(0))
-        box_coordinates[:, 0] = torch.minimum(torch.min(x_rotated, dim=-1)[0], torch.tensor(self.image_size[0]))
+        box_coordinates[:, 0] = torch.minimum(box_coordinates[:, 0], torch.tensor(self.image_size[0]))
         box_coordinates[:, 2] = torch.maximum(torch.max(x_rotated, dim=-1)[0], torch.tensor(0))
-        box_coordinates[:, 2] = torch.minimum(torch.max(x_rotated, dim=-1)[0], torch.tensor(self.image_size[0]))
+        box_coordinates[:, 2] = torch.minimum(box_coordinates[:, 2], torch.tensor(self.image_size[0]))
         box_coordinates[:, 1] = torch.maximum(torch.min(y_rotated, dim=-1)[0], torch.tensor(0))
-        box_coordinates[:, 1] = torch.minimum(torch.min(y_rotated, dim=-1)[0], torch.tensor(self.image_size[1]))
+        box_coordinates[:, 1] = torch.minimum(box_coordinates[:, 1], torch.tensor(self.image_size[1]))
         box_coordinates[:, 3] = torch.maximum(torch.max(y_rotated, dim=-1)[0], torch.tensor(0))
-        box_coordinates[:, 3] = torch.minimum(torch.max(y_rotated, dim=-1)[0], torch.tensor(self.image_size[1]))
+        box_coordinates[:, 3] = torch.minimum(box_coordinates[:, 3], torch.tensor(self.image_size[1]))
 
         if self.remove_cut_off_images:
             horizontal_inside_mask = torch.logical_and(
