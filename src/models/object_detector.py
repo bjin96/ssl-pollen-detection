@@ -35,7 +35,6 @@ class ObjectDetector(LightningModule):
             max_image_size: int,
             freeze_backbone: bool = False,
             classification_loss_function: ClassificationLoss = ClassificationLoss.CROSS_ENTROPY,
-            is_teacher: bool = False,
     ):
         """
         Creates a Faster R-CNN model with a pre-trained backbone from timm
@@ -49,15 +48,14 @@ class ObjectDetector(LightningModule):
             max_image_size: Maximum size to which the image is scaled.
             freeze_backbone: Whether to freeze the backbone for the training.
             classification_loss_function: Loss function to apply for the classification loss part of the ROI heads.
-            is_teacher: Boolean indicating whether the model is a teacher.
         """
         super().__init__()
         self.num_classes = num_classes
         self.timm_model = timm_model
         self.freeze_backbone = freeze_backbone
-        self.model = self.define_model(min_image_size, max_image_size, classification_loss_function, is_teacher)
+        self.model = self.define_model(min_image_size, max_image_size, classification_loss_function)
 
-    def define_model(self, min_image_size, max_image_size, classification_loss_function, is_teacher):
+    def define_model(self, min_image_size, max_image_size, classification_loss_function):
         feature_extractor = timm.create_model(
             self.timm_model.value,
             pretrained=True,
@@ -105,6 +103,6 @@ class ObjectDetector(LightningModule):
             # class_weights=class_weights
         )
 
-    def forward(self, images, targets=None, teacher_box_predictor=None, is_teacher=False):
-        return self.model(images, targets, teacher_box_predictor, is_teacher)
+    def forward(self, images, targets=None, teacher_box_predictor=None):
+        return self.model(images, targets, teacher_box_predictor)
 

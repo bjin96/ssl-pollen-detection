@@ -126,7 +126,7 @@ class SoftTeacher(pl.LightningModule):
             ]
         else:
             # Originally, this would be two different batches, labelled + unlabelled.
-            raw_x_pseudo = self.teacher(images, is_teacher=True)
+            raw_x_pseudo = self.teacher(images)
 
         cleaned_y_pseudo = clean_pseudo_labels(raw_x_pseudo, targets)
         loss_dict = self(student_images, cleaned_y_pseudo, self.teacher.model.roi_heads.box_predictor)

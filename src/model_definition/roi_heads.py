@@ -695,8 +695,7 @@ class RoIHeads(nn.Module):
                                class_logits,    # type: Tensor
                                box_regression,  # type: Tensor
                                proposals,       # type: List[Tensor]
-                               image_shapes,    # type: List[Tuple[int, int]]
-                               is_teacher=False,      # type: bool
+                               image_shapes     # type: List[Tuple[int, int]]
                                ):
         # type: (...) -> Tuple[List[Tensor], List[Tensor], List[Tensor]]
         device = class_logits.device
@@ -720,11 +719,10 @@ class RoIHeads(nn.Module):
             labels = torch.arange(num_classes, device=device)
             labels = labels.view(1, -1).expand_as(scores)
 
-            # remove predictions with the background label when not teacher.
-            if not is_teacher:
-                boxes = boxes[:, 1:]
-                scores = scores[:, 1:]
-                labels = labels[:, 1:]
+            # remove predictions with the background label
+            boxes = boxes[:, 1:]
+            scores = scores[:, 1:]
+            labels = labels[:, 1:]
 
             # batch everything, by making every class prediction be a separate instance
             boxes = boxes.reshape(-1, 4)
@@ -757,7 +755,6 @@ class RoIHeads(nn.Module):
                 image_shapes,  # type: List[Tuple[int, int]]
                 targets=None,   # type: Optional[List[Dict[str, Tensor]]]
                 teacher_box_predictor=None,     # type: nn.Module
-                is_teacher=False,       # type: bool
                 ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
         """
@@ -767,7 +764,6 @@ class RoIHeads(nn.Module):
             image_shapes (List[Tuple[H, W]])
             targets (List[Dict])
             teacher_box_predictor
-            is_teacher
         """
         if targets is not None:
             for t in targets:
@@ -804,7 +800,7 @@ class RoIHeads(nn.Module):
                 "loss_box_reg": loss_box_reg
             }
         else:
-            boxes, scores, labels = self.postprocess_detections(class_logits, box_regression, proposals, image_shapes, is_teacher)
+            boxes, scores, labels = self.postprocess_detections(class_logits, box_regression, proposals, image_shapes)
             num_images = len(boxes)
             for i in range(num_images):
                 result.append(
