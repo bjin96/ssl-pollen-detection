@@ -62,12 +62,12 @@ class RandomVerticalFlip(object):
 
 
 class RandomRotation(object):
-    def __init__(self, prob, degree_range, image_size, remove_cut_off_images=False, min_area=100):
+    def __init__(self, prob, degree_range, image_size, remove_cut_off_images=False, min_side_length=50):
         self.prob = prob
         self.degree_range = degree_range
         self.image_size = image_size
         self.remove_cut_off_images = remove_cut_off_images
-        self.min_area = min_area
+        self.min_side_length = min_side_length
 
     def __call__(self, image, target):
         if random.random() < self.prob:
@@ -139,7 +139,7 @@ class RandomRotation(object):
             )
             inside_mask = torch.logical_and(horizontal_inside_mask, vertical_inside_mask)
         else:
-            inside_mask = torch.greater_equal(_calculate_batched_box_area(box_coordinates), self.min_area)
+            inside_mask = torch.greater_equal(_calculate_batched_box_min_side(box_coordinates), self.min_side_length)
 
         return box_coordinates, inside_mask
 
@@ -151,13 +151,13 @@ class RandomCrop(object):
             min_scale: float = 0.7,
             max_scale: float = 0.9,
             image_size: Tuple = (1280, 960),
-            min_area: int = 100,
+            min_side_length: int = 50,
     ):
         self.prob = prob
         self.min_scale = min_scale
         self.max_scale = max_scale
         self.image_size = image_size
-        self.min_area = min_area
+        self.min_side_length = min_side_length
 
     def __call__(self, image, target):
         if random.random() < self.prob:
@@ -228,13 +228,13 @@ class RandomCrop(object):
         box_coordinates[:, [1, 3]] = torch.maximum(box_coordinates[:, [1, 3]], torch.tensor(0))
         box_coordinates[:, [1, 3]] = torch.minimum(box_coordinates[:, [1, 3]], torch.tensor(self.image_size[1]))
 
-        inside_mask = torch.greater_equal(_calculate_batched_box_area(box_coordinates), self.min_area)
+        inside_mask = torch.greater_equal(_calculate_batched_box_min_side(box_coordinates), self.min_side_length)
 
         return box_coordinates, inside_mask
 
 
-def _calculate_batched_box_area(box):
-    return (box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1])
+def _calculate_batched_box_min_side(box):
+    return torch.minimum(box[:, 2] - box[:, 0], box[:, 3] - box[:, 1])
 
 
 class ToTensor(object):
