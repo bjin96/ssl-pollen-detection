@@ -1,4 +1,5 @@
 import pickle
+from pathlib import Path
 from typing import Type
 
 import numpy as np
@@ -7,13 +8,17 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from pytorch_lightning import LightningModule
 
-from src.evaluation.confusion_matrix import ConfusionMatrix
-from src.models.soft_teacher import SoftTeacher
 from src.training.transforms import ToTensor
 import os
 from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
 import matplotlib.pyplot as plt
 from matplotlib import patches
+
+
+AUGSBURG15_2016_2018_PATH = '/Users/benni/Desktop/2016_2018_augsburg_15'
+MANUAL_TEST_SET_PATH = '/Users/benni/Desktop/manual_test_set'
+ANNOTATIONS_FILE = 'augsburg15_annotations.csv'
+MANUAL_ANNOTATIONS_FILE = 'augsburg15_annotations.csv'
 
 
 def plot_annotated_images(checkpoint_path: str, model_class: Type[LightningModule]):
@@ -78,10 +83,10 @@ def plot_ground_truth_images():
         )
 
 
-def plot_from_results(path_a):
+def plot_from_results(path_a, output_name):
     validation_dataset = Augsburg15DetectionDataset(
-        root_directory=os.path.join('../../datasets/pollen_only'),
-        image_info_csv='pollen15_val_annotations_preprocessed.csv',
+        root_directory=MANUAL_TEST_SET_PATH,
+        image_info_csv=MANUAL_ANNOTATIONS_FILE,
         transforms=ToTensor()
     )
     validation_loader = DataLoader(
@@ -95,6 +100,9 @@ def plot_from_results(path_a):
     with open(path_a, 'rb') as file:
         a = pickle.load(file)
 
+    output_path = Path(f'../../plots/interesting_{output_name}')
+    output_path.mkdir()
+
     for index, sample in enumerate(validation_loader):
         image, target = sample
 
@@ -106,7 +114,8 @@ def plot_from_results(path_a):
             target[0]['boxes'].detach().numpy(),
             target[0]['labels'].detach().numpy(),
             np.array([1.0 for _ in target[0]['boxes'].detach()]),
-            index
+            index,
+            output_path
         )
 
 
@@ -150,7 +159,17 @@ def make_validation_predictions(checkpoint_path, model_class):
         pickle.dump(results, file)
 
 
-def plot_bounding_box_image_scores(image, bounding_boxes, labels, scores, ground_truth_boxes, ground_truth_labels, ground_truth_scores, index):
+def plot_bounding_box_image_scores(
+        image,
+        bounding_boxes,
+        labels,
+        scores,
+        ground_truth_boxes,
+        ground_truth_labels,
+        ground_truth_scores,
+        index,
+        output_path,
+):
     scores_mask = scores > 0.5
     ground_truth_scores_mask = ground_truth_scores > 0.5
 
@@ -171,7 +190,7 @@ def plot_bounding_box_image_scores(image, bounding_boxes, labels, scores, ground
     _plot_bounding_boxes(bounding_boxes, labels, scores, ax, 'green')
     _plot_bounding_boxes(ground_truth_boxes, ground_truth_labels, ground_truth_scores, ax, 'red')
 
-    plt.savefig(f'../../plots/interesting_ssl_ce_no_color/{index}.jpg', bbox_inches='tight')
+    plt.savefig(output_path / f'{index}.jpg', bbox_inches='tight')
     plt.close()
 
 
@@ -219,7 +238,10 @@ def is_interesting_box(box, label, other_boxes, other_labels):
     return True
 
 
-def _plot_bounding_boxes(bounding_boxes, labels, scores, ax, color, updated):
+def _plot_bounding_boxes(bounding_boxes, labels, scores, ax, color, updated=None):
+    if updated is None:
+        updated = [False for _ in labels]
+
     for bounding_box, label, score, u in zip(bounding_boxes, labels, scores, updated):
         width = bounding_box[2] - bounding_box[0]
         height = bounding_box[3] - bounding_box[1]
@@ -242,7 +264,7 @@ def _plot_bounding_boxes(bounding_boxes, labels, scores, ax, color, updated):
         ax.text(
             bounding_box[0],
             label_y,
-            f'{label} {score}',
+            f'{Augsburg15DetectionDataset.INVERSE_CLASS_MAPPING[int(label)]} {score:.2f}',
             color='white',
             bbox=dict(facecolor=color, edgecolor=color)
         )
@@ -293,12 +315,15 @@ if __name__ == '__main__':
     # CKPT_PATH = '/Users/benni/Desktop/ma/cluster_results/ssl-fixed-ema/epoch=11-step=35460.ckpt'
     # plot_annotated_images(CKPT_PATH, SoftTeacher)
     # make_validation_predictions(CKPT_PATH, SoftTeacher)
-    # plot_from_results(results[2])
+    plot_from_results(
+        '/Users/benni/Desktop/ma/evaluation/ssl_remove_teacher_bg_predictions.pkl',
+        'ssl_remove_teacher_bg_preds'
+    )
 
     # print(count_bounding_boxes(baseline_results, 0.0))
 
     # print_confusion_matrix(ssl_fixed_ema)
-    plot_ground_truth_images()
+    # plot_ground_truth_images()
 
     # plot_image_with_bounding_boxes(
     #     '/Volumes/Benni T5/master_data/2018/20180411180809_A034779/images/polle-im_01_13_17-20180411180809-pmon-00013-A034779-tiffFAST.SYN._FP.png',

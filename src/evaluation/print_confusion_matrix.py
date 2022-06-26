@@ -48,8 +48,8 @@ def print_confusion_matrix(path):
 
     print('baseline: ')
     print(matrix)
-    print(f'FP: {matrix[:, -1].sum()}')
-    print(f'FN: {matrix[-1, :].sum()}')
+    print(f'FN: {matrix[:, -1].sum()}')
+    print(f'FP: {matrix[-1, :].sum()}')
 
 
 def save_confusion_matrix(path, output_path):
@@ -96,19 +96,19 @@ if __name__ == '__main__':
         # '/Users/benni/Desktop/ma/evaluation/efficient_net_focal_no_rotation-results.pkl',
         # '/Users/benni/Desktop/ma/evaluation/ssl-focal-no-color-results.pkl',
         # '/Users/benni/Desktop/ma/evaluation/ssl-ce-no-color-results.pkl',
-        '/Users/benni/Desktop/ma/evaluation/fix_cropped_results.pkl',
+        '/Users/benni/Desktop/ma/evaluation/ssl-focal-no-color-results.pkl.pkl',
     ]
     output = [
         # '/Users/benni/Desktop/ma/evaluation/efficient_net_focal_no_rotation-results.mat',
         # '/Users/benni/Desktop/ma/evaluation/ssl-focal-no-color-results.mat',
         # '/Users/benni/Desktop/ma/evaluation/ssl-ce-no-color-results.mat',
-        '/Users/benni/Desktop/ma/evaluation/fix_cropped_results.mat',
+        '/Users/benni/Desktop/ma/evaluation/ssl-focal-no-color-results.mat',
     ]
     # print_confusion_matrix(results[0])
     # visualize_confusion_matrix(results)
 
     for r, o in zip(results, output):
-        save_confusion_matrix(r, o)
+        # save_confusion_matrix(r, o)
         print_confusion_matrix(o)
-        visualize_confusion_matrix(o, horizontal_normalization=True)
+        # visualize_confusion_matrix(o, horizontal_normalization=True)
         # print_confusion_matrix(o)
