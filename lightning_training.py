@@ -7,8 +7,8 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset
-from src.models.object_detector import ClassificationLoss, Augmentation
+from src.data_loading.load_augsburg15 import Augsburg15Dataset, Augmentation
+from src.models.object_detector import ClassificationLoss
 from src.models.timm_adapter import Network
 
 from src.models.soft_teacher import SoftTeacher
@@ -79,11 +79,6 @@ augmentations = {
     help='Which loss function to use for the classification.'
 )
 @click.option(
-    '--use_weights',
-    default=False,
-    help='Whether to use weights to counteract class imbalance.'
-)
-@click.option(
     '--data_augmentation',
     default=('vertical_flip', 'horizontal_flip'),
     multiple=True,
@@ -99,6 +94,21 @@ augmentations = {
     default=0,
     help='Number of epochs with supervised training only.'
 )
+@click.option(
+    '--train_dataset',
+    default='train_synthesized_2016_augsburg15',
+    help='Dataset to use for training.'
+)
+@click.option(
+    '--validation_dataset',
+    default='validation_synthesized_2016_augsburg15',
+    help='Dataset to use for validation.'
+)
+@click.option(
+    '--test_dataset',
+    default='test_synthesized_2016_augsburg15',
+    help='Dataset to use for test.'
+)
 def start_experiment(
         experiment_name: str,
         checkpoint_path: str,
@@ -108,24 +118,29 @@ def start_experiment(
         max_image_size: int,
         freeze_backbone: bool,
         classification_loss_function: str,
-        use_weights: bool,
         data_augmentation: List[str],
         unsupervised_loss_weight: float,
         student_only_epochs: int,
+        train_dataset: str,
+        validation_dataset: str,
+        test_dataset: str,
 ):
     print(
         f'Starting experiment {experiment_name=} with: {batch_size=}, {backbone=}, {min_image_size=}, '
-        f'{max_image_size=}, {freeze_backbone=}, {classification_loss_function=}, {use_weights=}, '
-        f'{data_augmentation=}, {student_only_epochs=}'
+        f'{max_image_size=}, {freeze_backbone=}, {classification_loss_function=}, {data_augmentation=}, '
+        f'{student_only_epochs=}'
     )
 
     backbone = NETWORKS[backbone]
     classification_loss_function = CLASSIFICATION_LOSS_FUNCTIONS[classification_loss_function]
-    class_weights = Augsburg15DetectionDataset.CLASS_WEIGHTS if use_weights else None
     data_augmentations = [augmentations[augmentation] for augmentation in data_augmentation]
 
+    train_dataset = Augsburg15Dataset.create_dataset_from_name(train_dataset, data_augmentations)
+    validation_dataset = Augsburg15Dataset.create_dataset_from_name(validation_dataset, data_augmentations)
+    test_dataset = Augsburg15Dataset.create_dataset_from_name(test_dataset, data_augmentations)
+
     model = SoftTeacher(
-        num_classes=Augsburg15DetectionDataset.NUM_CLASSES,
+        num_classes=Augsburg15Dataset.NUM_CLASSES,
         batch_size=1,
         learning_rate=0.0001,
         teacher_pseudo_roi_threshold=0.9,
@@ -133,7 +148,9 @@ def start_experiment(
         student_inference_threshold=0.05,
         unsupervised_loss_weight=unsupervised_loss_weight,
         backbone=backbone,
-        augmentations=data_augmentations,
+        train_dataset=train_dataset,
+        validation_dataset=validation_dataset,
+        test_dataset=test_dataset,
         min_image_size=800,
         max_image_size=1066,
         freeze_backbone=False,

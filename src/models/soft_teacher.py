@@ -1,6 +1,4 @@
-import os
 from copy import deepcopy
-from typing import List
 
 import pytorch_lightning as pl
 import torch
@@ -11,13 +9,12 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torchmetrics.detection.map import MeanAveragePrecision
 
-from src.data_loading.load_augsburg15 import Augsburg15DetectionDataset, collate_augsburg15_detection
+from src.data_loading.load_augsburg15 import collate_augsburg15_detection, \
+    Augsburg15Dataset
 from src.image_tools.overlap import clean_pseudo_labels
 from src.models.exponential_moving_average import ExponentialMovingAverage
-from src.models.object_detector import ObjectDetector, Augmentation, ClassificationLoss
+from src.models.object_detector import ObjectDetector, ClassificationLoss
 from src.models.timm_adapter import Network
-from src.training.transforms import Compose, ToTensor, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation, \
-    RandomCrop
 
 
 class SoftTeacher(pl.LightningModule):
@@ -37,7 +34,9 @@ class SoftTeacher(pl.LightningModule):
             backbone: Network,
             min_image_size: int,
             max_image_size: int,
-            augmentations: List[Augmentation],
+            train_dataset: Augsburg15Dataset,
+            validation_dataset: Augsburg15Dataset,
+            test_dataset: Augsburg15Dataset,
             freeze_backbone: bool = False,
             classification_loss_function: ClassificationLoss = ClassificationLoss.CROSS_ENTROPY,
             student_only_epochs: int = 1,
@@ -49,8 +48,10 @@ class SoftTeacher(pl.LightningModule):
         self.batch_size = batch_size
         self.unsupervised_loss_weight = unsupervised_loss_weight
         self.learning_rate = learning_rate
-        self.augmentations = augmentations
         self.student_only_epochs = student_only_epochs
+        self.train_dataset = train_dataset
+        self.validation_dataset = validation_dataset
+        self.test_dataset = test_dataset
 
         self.student = ObjectDetector(
             num_classes=num_classes,
@@ -182,62 +183,27 @@ class SoftTeacher(pl.LightningModule):
         optimizer.zero_grad(set_to_none=True)
 
     def train_dataloader(self) -> TRAIN_DATALOADERS:
-        transforms_list = [ToTensor()]
-
-        if Augmentation.HORIZONTAL_FLIP in self.augmentations:
-            transforms_list.append(RandomHorizontalFlip(0.5))
-        if Augmentation.VERTICAL_FLIP in self.augmentations:
-            transforms_list.append(RandomVerticalFlip(0.5))
-        if Augmentation.CROP in self.augmentations:
-            transforms_list.append(RandomCrop(0.5))
-
-        if Augmentation.ROTATION in self.augmentations and Augmentation.ROTATION_CUTOFF in self.augmentations:
-            raise ValueError("Cannot apply rotation and rotation cutoff data augmentation at the same time.")
-
-        if Augmentation.ROTATION in self.augmentations:
-            transforms_list.append(RandomRotation(0.5, 25, (1280, 960))),
-        elif Augmentation.ROTATION_CUTOFF in self.augmentations:
-            transforms_list.append(RandomRotation(0.5, 25, (1280, 960), True))
-
-        train_dataset = Augsburg15DetectionDataset(
-            root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
-            image_info_csv='pollen15_train_annotations_preprocessed.csv',
-            transforms=Compose(transforms_list)
-        )
         return DataLoader(
-            train_dataset,
+            self.train_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_augsburg15_detection,
-            drop_last=True,
             shuffle=True,
             num_workers=2
         )
 
     def val_dataloader(self) -> EVAL_DATALOADERS:
-        validation_dataset = Augsburg15DetectionDataset(
-            root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
-            image_info_csv='pollen15_val_annotations_preprocessed.csv',
-            transforms=ToTensor()
-        )
         return DataLoader(
-            validation_dataset,
+            self.validation_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_augsburg15_detection,
-            drop_last=True,
             num_workers=2
         )
 
     def test_dataloader(self) -> EVAL_DATALOADERS:
-        validation_dataset = Augsburg15DetectionDataset(
-            root_directory=os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
-            image_info_csv='pollen15_test_annotations_preprocessed.csv',
-            transforms=ToTensor()
-        )
         return DataLoader(
-            validation_dataset,
+            self.test_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_augsburg15_detection,
-            drop_last=True,
             num_workers=2
         )
 

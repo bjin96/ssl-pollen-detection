@@ -1,4 +1,6 @@
 import os
+from enum import Enum
+from typing import List
 
 import pandas as pd
 import numpy as np
@@ -6,8 +8,62 @@ from torch import FloatTensor, LongTensor, Tensor, ByteTensor, stack
 from torch.utils.data import Dataset
 from PIL import Image
 
+from src.training.transforms import ToTensor, RandomHorizontalFlip, RandomVerticalFlip, RandomCrop, RandomRotation, \
+    Compose
 
-class Augsburg15DetectionDataset(Dataset):
+
+class DatasetType(Enum):
+    RAW = 'RAW'
+    SYNTHESISED = 'FAST.SYN._FP'
+
+
+class Augmentation(Enum):
+    VERTICAL_FLIP = 'vertical_flip'
+    HORIZONTAL_FLIP = 'horizontal_flip'
+    ROTATION = 'rotation'
+    ROTATION_CUTOFF = 'rotation_cutoff'
+    CROP = 'crop'
+
+
+class Augsburg15Dataset(Dataset):
+
+    DATASET_MAPPING = {
+        'train_synthesized_2016_augsburg15': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
+            'pollen15_train_annotations_preprocessed.csv',
+            DatasetType.SYNTHESISED,
+        ),
+        'validation_synthesized_2016_augsburg15': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
+            'pollen15_val_annotations_preprocessed.csv',
+            DatasetType.SYNTHESISED
+        ),
+        'test_synthesized_2016_augsburg15': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/pollen_only'),
+            'pollen15_test_annotations_preprocessed.csv',
+            DatasetType.SYNTHESISED
+        ),
+        'train_synthesized_2016_2018_augsburg15': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/2016_2018_augsburg_15'),
+            'augsburg15_annotations.csv',
+            DatasetType.SYNTHESISED
+        ),
+        'train_raw_2016_2018_augsburg15': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/2016_2018_augsburg_15'),
+            'augsburg15_annotations.csv',
+            DatasetType.RAW
+        ),
+        'test_synthesized_manual_set': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/manual_test_set'),
+            'augsburg15_annotations.csv',
+            DatasetType.SYNTHESISED
+        ),
+        'test_raw_manual_set': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/manual_test_set'),
+            'augsburg15_annotations.csv',
+            DatasetType.RAW
+        ),
+    }
 
     CLASS_MAPPING = {
         'Alnus': 1,
@@ -65,12 +121,53 @@ class Augsburg15DetectionDataset(Dataset):
     ]
     NUM_CLASSES = 16
 
-    def __init__(self, root_directory, image_info_csv, transforms=None):
-        self.transforms = transforms
+    def __init__(self, root_directory, image_info_csv, transforms, dataset_type=DatasetType.SYNTHESISED):
+        self.transforms = self._process_transforms(transforms)
         self.root_directory = root_directory
         self.image_info_csv = image_info_csv
+        self.dataset_type = dataset_type
 
         self.image_info = self._parse_image_info_csv()
+
+    @classmethod
+    def create_dataset_from_name(
+            cls,
+            name: str,
+            transforms
+    ):
+        """
+        Factory method for creating a dataset from name.
+        """
+        root_directory, image_info_csv, dataset_type = cls.DATASET_MAPPING[name]
+        return cls(
+            root_directory=root_directory,
+            image_info_csv=image_info_csv,
+            transforms=transforms,
+            dataset_type=dataset_type,
+        )
+
+    @staticmethod
+    def _process_transforms(
+            transforms: List[Augmentation]
+    ):
+        transforms_list = [ToTensor()]
+
+        if Augmentation.HORIZONTAL_FLIP in transforms:
+            transforms_list.append(RandomHorizontalFlip(0.5))
+        if Augmentation.VERTICAL_FLIP in transforms:
+            transforms_list.append(RandomVerticalFlip(0.5))
+        if Augmentation.CROP in transforms:
+            transforms_list.append(RandomCrop(0.5))
+
+        if Augmentation.ROTATION in transforms and Augmentation.ROTATION_CUTOFF in transforms:
+            raise ValueError("Cannot apply rotation and rotation cutoff data augmentation at the same time.")
+
+        if Augmentation.ROTATION in transforms:
+            transforms_list.append(RandomRotation(0.5, 25, (1280, 960))),
+        elif Augmentation.ROTATION_CUTOFF in transforms:
+            transforms_list.append(RandomRotation(0.5, 25, (1280, 960), True))
+
+        return Compose(transforms_list)
 
     def __len__(self):
         return len(self.image_info)
@@ -104,6 +201,11 @@ class Augsburg15DetectionDataset(Dataset):
     def _parse_image_info_csv(self):
         image_info = pd.read_csv(os.path.join(self.root_directory, self.image_info_csv), header=None)
         image_info.columns = ['file', 'x1', 'y1', 'x2', 'y2', 'labels']
+        image_info['file'] = image_info['file'].str.replace(
+            DatasetType.SYNTHESISED.value,
+            self.dataset_type.value,
+            regex=False
+        )
         image_info['area'] = (image_info['x2'] - image_info['x1']) * (image_info['y2'] - image_info['y1'])
         image_info['iscrowd'] = 0
         image_info['labels'] = image_info['labels'].map(self.CLASS_MAPPING)

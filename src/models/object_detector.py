@@ -16,14 +16,6 @@ class ClassificationLoss(Enum):
     FOCAL = calculate_focal_loss
 
 
-class Augmentation(Enum):
-    VERTICAL_FLIP = 'vertical_flip'
-    HORIZONTAL_FLIP = 'horizontal_flip'
-    ROTATION = 'rotation'
-    ROTATION_CUTOFF = 'rotation_cutoff'
-    CROP = 'crop'
-
-
 class ObjectDetector(LightningModule):
 
     def __init__(
