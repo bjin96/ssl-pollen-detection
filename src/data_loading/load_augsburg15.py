@@ -45,12 +45,32 @@ class Augsburg15Dataset(Dataset):
         ),
         'train_synthesized_2016_2018_augsburg15': (
             os.path.join(os.path.dirname(__file__), '../../datasets/2016_2018_augsburg_15'),
-            'augsburg15_annotations.csv',
+            'train_augsburg15_annotations.csv',
             DatasetType.SYNTHESISED
         ),
         'train_raw_2016_2018_augsburg15': (
             os.path.join(os.path.dirname(__file__), '../../datasets/2016_2018_augsburg_15'),
-            'augsburg15_annotations.csv',
+            'train_augsburg15_annotations.csv',
+            DatasetType.RAW
+        ),
+        'validation_synthesized_2016_2018_augsburg15': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/2016_2018_augsburg_15'),
+            'validation_augsburg15_annotations.csv',
+            DatasetType.SYNTHESISED
+        ),
+        'validation_raw_2016_2018_augsburg15': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/2016_2018_augsburg_15'),
+            'validation_augsburg15_annotations.csv',
+            DatasetType.RAW
+        ),
+        'test_synthesized_2016_2018_augsburg15': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/2016_2018_augsburg_15'),
+            'test_augsburg15_annotations.csv',
+            DatasetType.SYNTHESISED
+        ),
+        'test_raw_2016_2018_augsburg15': (
+            os.path.join(os.path.dirname(__file__), '../../datasets/2016_2018_augsburg_15'),
+            'test_augsburg15_annotations.csv',
             DatasetType.RAW
         ),
         'test_synthesized_manual_set': (
