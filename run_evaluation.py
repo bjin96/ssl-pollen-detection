@@ -13,11 +13,12 @@ from src.models.soft_teacher import SoftTeacher
 
 
 def _get_evaluation_data_loader(evaluation_dataset_name):
-    root_directory, image_info_csv, _ = Augsburg15Dataset.DATASET_MAPPING[evaluation_dataset_name]
+    root_directory, image_info_csv, dataset_type = Augsburg15Dataset.DATASET_MAPPING[evaluation_dataset_name]
     dataset = Augsburg15Dataset(
         root_directory=root_directory,
         image_info_csv=image_info_csv,
-        transforms=[]
+        transforms=[],
+        dataset_type=dataset_type,
     )
     return DataLoader(
         dataset,
