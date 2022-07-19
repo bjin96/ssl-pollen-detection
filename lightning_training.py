@@ -136,8 +136,8 @@ def start_experiment(
     data_augmentations = [augmentations[augmentation] for augmentation in data_augmentation]
 
     train_dataset = Augsburg15Dataset.create_dataset_from_name(train_dataset, data_augmentations)
-    validation_dataset = Augsburg15Dataset.create_dataset_from_name(validation_dataset, data_augmentations)
-    test_dataset = Augsburg15Dataset.create_dataset_from_name(test_dataset, data_augmentations)
+    validation_dataset = Augsburg15Dataset.create_dataset_from_name(validation_dataset, [])
+    test_dataset = Augsburg15Dataset.create_dataset_from_name(test_dataset, [])
 
     model = SoftTeacher(
         num_classes=Augsburg15Dataset.NUM_CLASSES,
