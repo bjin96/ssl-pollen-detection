@@ -6,7 +6,7 @@ For the supervised part of the implementation please check out https://github.co
 
 ## Installation
 
-Please install the necessary python packages via pip, i.e. like so:
+Clone the repository and install the necessary python packages via pip, i.e. like so:
 
 ```commandline
 pip install -r requirements.txt
